@@ -1,0 +1,21 @@
+gyro:
+  enabled: true
+  noise_std_rad_s: 1.0e-4
+  bias_rad_s: 1.0e-3
+
+magnetometer:
+  enabled: true
+  noise_std_T: 1.0e-6
+
+sun_sensor:
+  enabled: true
+  noise_std_rad: 0.01
+
+star_tracker:
+  enabled: true
+  noise_std_rad: 5.0e-5
+
+gps:                                # navigation / orbit -> nadir reference
+  enabled: true
+  position_noise_m: 10.0
+  velocity_noise_ms: 0.1

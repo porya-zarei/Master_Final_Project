@@ -1,0 +1,10 @@
+gravity_gradient: true
+
+aerodynamic:
+  enabled: false
+
+solar_radiation_pressure:
+  enabled: false
+
+magnetic_residual:
+  enabled: false

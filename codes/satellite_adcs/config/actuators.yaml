@@ -1,0 +1,12 @@
+reaction_wheels:
+  count: 3
+  max_torque_Nm: 0.010             # 10 mN*m per wheel
+  max_speed_rad_s: 628.3           # ~6000 rpm
+  inertia_kgm2: 2.0e-4
+  axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+  initial_speed_rad_s: 0.0
+
+magnetorquers:
+  count: 3
+  max_dipole_Am2: 1.0
+  axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]

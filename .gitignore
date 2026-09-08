@@ -1,0 +1,30 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+.python-version
+
+# ---- Generated / runtime artifacts ----
+results/
+viz_output/
+tb_logs/
+logs/
+*.bin
+*.zip
+*.pt
+*.pth
+*.onnx
+*.log
+
+# ---- Office / editor lock & temp files ----
+~$*
+*.tmp
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---- Notebook checkpoints ----
+.ipynb_checkpoints/

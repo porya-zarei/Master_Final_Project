@@ -1,0 +1,12 @@
+# Core simulation + RL stack
+bsk-rl==1.3.0
+stable-baselines3>=2.1
+gymnasium>=0.29
+
+# Later phases
+torch>=2.2
+
+# Dev / plotting
+numpy
+matplotlib
+pytest

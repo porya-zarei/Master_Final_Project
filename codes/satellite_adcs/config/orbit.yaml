@@ -1,0 +1,10 @@
+orbit:
+  altitude_km: 500.0
+  inclination_deg: 51.6
+  eccentricity: 0.001
+  raan_deg: 0.0
+  argp_deg: 0.0
+  true_anomaly_deg: 0.0
+  mu_m3_s2: 3.986004418e14         # Earth GM [m^3/s^2]
+  Re_m: 6378137.0                  # Earth radius [m]
+  propagation: two_body            # two_body (Keplerian) | j2 (later)

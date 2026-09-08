@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Experiment artifacts
+tb_logs/
+results/
+viz_output/
+*.zip          # SB3 model checkpoints
+*.pt
+*.pth
+*.onnx
+*.quant.onnx
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Basilisk support data lives in user cache (~/.cache/bsk_support_data), not here

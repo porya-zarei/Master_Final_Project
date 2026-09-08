@@ -1,0 +1,15 @@
+satellite:
+  name: NadirSat-24U
+  mass: 35.0                       # kg
+  inertia:                         # kg*m^2 (24U, 40x20x30 cm, ~35 kg)
+    Jxx: 0.38
+    Jyy: 0.73
+    Jzz: 0.58
+    Jxy: 0.0
+    Jxz: 0.0
+    Jyz: 0.0
+  dimensions_m: [0.40, 0.20, 0.30]
+  initial:
+    attitude: random               # random on SO(3)
+    angular_velocity: random       # uniform in [-max, +max]
+    omega_max_deg_per_s: 5.0       # release tumble envelope

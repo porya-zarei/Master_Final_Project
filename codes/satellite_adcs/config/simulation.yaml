@@ -1,0 +1,9 @@
+simulation:
+  dt_s: 0.1                         # dynamics integrator step
+  dynamics_hz: 10
+  control_hz: 4                     # LQR runs at 4 Hz
+  estimator_hz: 4                   # MEKF update at 4 Hz
+  episode_duration_s: 1200.0        # 20 min episode
+  random_seed: 42
+  detumble_enabled: false            # MTQ B-dot is weak; LQR+RW handles acquisition
+  detumble_threshold_deg_s: 0.3
