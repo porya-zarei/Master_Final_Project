@@ -21,6 +21,33 @@ def design_lqr(J: np.ndarray, Q: np.ndarray, R: np.ndarray):
     return K
 
 
+def allocate_torque(tau_des, dyn, rw_max_torque, mtq_max_dipole, rw_J,
+                    k_desat=0.02, momentum_mgmt=True):
+    """Fault-tolerant control allocation (shared by LQR controller and RL env).
+
+    1. RW: invert health so a degraded wheel still delivers tau_des
+       (command = tau_des / health, clipped at the wheel limit).
+    2. MTQ: provide the residual torque the wheels cannot deliver
+       (torque = m x B -> only the component perpendicular to B is achievable).
+    3. MTQ also dumps accumulated wheel momentum (desaturation).
+    """
+    import numpy as _np
+    health = _np.asarray(dyn.rw_health, dtype=float)
+    tau_des = _np.asarray(tau_des, dtype=float)
+    tau_cmd = _np.where(health > 1e-6, tau_des / _np.maximum(health, 1e-6), 0.0)
+    tau_cmd = _np.clip(tau_cmd, -rw_max_torque, rw_max_torque)
+    residual = tau_des - tau_cmd * health
+
+    B = _np.asarray(dyn.B_body, dtype=float)
+    B2 = float(B @ B) + 1e-12
+    m_att = _np.cross(B, residual) / B2
+    if momentum_mgmt:
+        H_w = rw_J * _np.asarray(dyn.omega_w, dtype=float)
+        m_att = m_att + _np.cross(B, -k_desat * H_w) / B2
+    m = _np.clip(m_att, -mtq_max_dipole, mtq_max_dipole)
+    return tau_cmd, m
+
+
 class ADCSController:
     """Phase manager: B-dot detumble then LQR nadir pointing."""
 
@@ -97,25 +124,6 @@ class ADCSController:
         return self._allocate(tau_des, dyn)
 
     def _allocate(self, tau_des, dyn):
-        """Fault-tolerant control allocation.
-
-        1. RW: invert the health so a degraded wheel still delivers tau_des
-           (command = tau_des / health, clipped at the wheel torque limit).
-        2. MTQ: provide the residual torque the wheels cannot deliver
-           (torque = m x B, so only the component perpendicular to B is achievable).
-        3. MTQ also dumps accumulated wheel momentum (desaturation).
-        """
-        health = np.asarray(dyn.rw_health, dtype=float)
-        h_safe = np.maximum(health, 1e-6)
-        tau_cmd = np.where(health > 1e-6, tau_des / h_safe, 0.0)
-        tau_cmd = np.clip(tau_cmd, -self.rw_max_torque, self.rw_max_torque)
-        delivered = tau_cmd * health
-        residual = tau_des - delivered
-
-        B = np.asarray(dyn.B_body, dtype=float)
-        B2 = float(B @ B) + 1e-12
-        m_attitude = np.cross(B, residual) / B2          # residual -> MTQ (perp. to B)
-        H_w = self.rw_J * np.asarray(dyn.omega_w, dtype=float)
-        m_desat = np.cross(B, -self.k_desat * H_w) / B2 if self.momentum_mgmt else 0.0
-        m = np.clip(m_attitude + m_desat, -self.mtq_max_dipole, self.mtq_max_dipole)
-        return tau_cmd, m
+        return allocate_torque(tau_des, dyn, self.rw_max_torque, self.mtq_max_dipole,
+                               self.rw_J, k_desat=self.k_desat,
+                               momentum_mgmt=self.momentum_mgmt)
