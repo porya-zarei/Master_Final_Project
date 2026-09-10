@@ -33,6 +33,10 @@ class ADCSController:
         self.rw_max_torque = rw["max_torque_Nm"]
         self.mtq_max_dipole = mtq["max_dipole_Am2"]
         self.n_rw = rw["count"]
+        self.rw_J = rw["inertia_kgm2"]
+        # MTQ momentum desaturation (dump wheel momentum)
+        self.momentum_mgmt = True
+        self.k_desat = 0.02          # desaturation gain (slow)
 
         # LQR weights
         self.Q = np.diag([1.0, 1.0, 1.0, 0.3, 0.3, 0.3])
@@ -90,5 +94,28 @@ class ADCSController:
         omega_err = omega_hat - omega_ref_body
         x = np.concatenate([theta, omega_err])
         tau_des = -(self.K @ x)
-        tau_rw = np.clip(tau_des, -self.rw_max_torque, self.rw_max_torque)
-        return tau_rw, np.zeros(3)
+        return self._allocate(tau_des, dyn)
+
+    def _allocate(self, tau_des, dyn):
+        """Fault-tolerant control allocation.
+
+        1. RW: invert the health so a degraded wheel still delivers tau_des
+           (command = tau_des / health, clipped at the wheel torque limit).
+        2. MTQ: provide the residual torque the wheels cannot deliver
+           (torque = m x B, so only the component perpendicular to B is achievable).
+        3. MTQ also dumps accumulated wheel momentum (desaturation).
+        """
+        health = np.asarray(dyn.rw_health, dtype=float)
+        h_safe = np.maximum(health, 1e-6)
+        tau_cmd = np.where(health > 1e-6, tau_des / h_safe, 0.0)
+        tau_cmd = np.clip(tau_cmd, -self.rw_max_torque, self.rw_max_torque)
+        delivered = tau_cmd * health
+        residual = tau_des - delivered
+
+        B = np.asarray(dyn.B_body, dtype=float)
+        B2 = float(B @ B) + 1e-12
+        m_attitude = np.cross(B, residual) / B2          # residual -> MTQ (perp. to B)
+        H_w = self.rw_J * np.asarray(dyn.omega_w, dtype=float)
+        m_desat = np.cross(B, -self.k_desat * H_w) / B2 if self.momentum_mgmt else 0.0
+        m = np.clip(m_attitude + m_desat, -self.mtq_max_dipole, self.mtq_max_dipole)
+        return tau_cmd, m

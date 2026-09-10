@@ -28,7 +28,7 @@ def pointing_error_deg(dyn):
     return np.degrees(np.arccos(np.clip(np.dot(zB_I, nadir), -1, 1)))
 
 
-def run_episode(cfg, seed=0, T=None):
+def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -37,7 +37,10 @@ def run_episode(cfg, seed=0, T=None):
     sensors = SensorSuite(cfg, rng)
     est = MEKF(cfg)
     ctrl = ADCSController(cfg, dyn.J, dyn.mu, dyn.a, rng)
+    ctrl.momentum_mgmt = momentum_mgmt
     dyn.reset()
+    if rw_health is not None:
+        dyn.set_rw_health(rw_health)
     est.q_hat = np.array([1.0, 0, 0, 0])
     est.P = np.eye(3) * 1e-2
 

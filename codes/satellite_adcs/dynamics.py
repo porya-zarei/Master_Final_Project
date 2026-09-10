@@ -43,6 +43,8 @@ class SpacecraftDynamics:
         self.rw_max_torque = rw["max_torque_Nm"]
         self.rw_max_speed = rw["max_speed_rad_s"]
         self.n_rw = rw["count"]
+        # reaction-wheel health fault: tau_actual = health * tau_command (1.0 = healthy)
+        self.rw_health = np.ones(self.n_rw)
 
         # magnetorquers
         mtq = cfg["actuators"]["magnetorquers"]
@@ -152,11 +154,13 @@ class SpacecraftDynamics:
         q_dot = 0.5 * quat_mult(q, np.array([0.0, w[0], w[1], w[2]]))
 
         tau_mtq = np.cross(m_mtq, self.B_body)
-        tau = -np.cross(w, H) + np.asarray(tau_rw) + tau_mtq + self.disturbance_torque()
+        # actuator fault: each wheel delivers only `health` of its commanded torque
+        tau_rw_eff = np.asarray(tau_rw, dtype=float) * self.rw_health
+        tau = -np.cross(w, H) + tau_rw_eff + tau_mtq + self.disturbance_torque()
         w_dot = self.J_inv @ tau
 
-        # wheel speed: motor applies -tau_rw to the wheel (momentum bookkeeping)
-        ow_dot = -np.asarray(tau_rw) / self.rw_J
+        # wheel speed: motor applies -tau_rw (effective) to the wheel (momentum bookkeeping)
+        ow_dot = -tau_rw_eff / self.rw_J
 
         rn = np.linalg.norm(self.r)
         v_dot = -self.mu * self.r / rn**3
@@ -197,3 +201,8 @@ class SpacecraftDynamics:
     def saturate_rw(self, tau):
         """Clip wheel torque commands to per-wheel maximum."""
         return np.clip(tau, -self.rw_max_torque, self.rw_max_torque)
+
+    def set_rw_health(self, health):
+        """Set per-wheel health in [0,1] (fault: tau_actual = health * tau_command)."""
+        self.rw_health = np.asarray(health, dtype=float)
+        return self
