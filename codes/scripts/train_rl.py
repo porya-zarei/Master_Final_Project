@@ -28,10 +28,17 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNorm
 
 
 def make_env(seed, control_hz, episode_time, fault_mode, health_lo, health_hi,
-             reward_shape=None):
-    # reward_shape is a diagnostic override used by the C4.1 attribution study;
-    # None -> use the value from rl.yaml (behaviour unchanged for every other caller).
-    ov = {"rl": {"reward_shape": reward_shape}} if reward_shape else None
+             reward_shape=None, reward_over=None):
+    # reward_shape / reward_over are diagnostic overrides used by the C4.1 attribution
+    # and C4.2 scale studies; None -> use the values from rl.yaml (behaviour unchanged
+    # for every other caller). load_config() deep-merges, so passing one key does NOT
+    # drop the rest of the `rl` section.
+    ov_rl = {}
+    if reward_shape:
+        ov_rl["reward_shape"] = reward_shape
+    if reward_over:
+        ov_rl.update(reward_over)
+    ov = {"rl": ov_rl} if ov_rl else None
     return ADCSEnv(fault_mode=fault_mode, health_range=(health_lo, health_hi),
                    control_hz=control_hz, episode_time=episode_time, seed=seed,
                    overrides=ov)
@@ -79,6 +86,10 @@ def main():
                    help="VecNormalize reward normalization (0 = keep shaped signal)")
     p.add_argument("--reward_shape", default=None, choices=["quad", "log", "bonus"],
                    help="reward shaping override (C4.1 attribution); default from rl.yaml")
+    p.add_argument("--reward_theta_weight", type=float, default=None,
+                   help="reward_theta_weight override (C4.2 scale study); default from rl.yaml")
+    p.add_argument("--reward_tol_bonus", type=float, default=None,
+                   help="reward_tol_bonus override (C4.2 scale study); default from rl.yaml")
     a = p.parse_args()
 
     os.makedirs(a.out, exist_ok=True)
@@ -89,10 +100,18 @@ def main():
     fault_mode = a.fault_mode or rl.get("fault_mode", "random_health")
     h_lo, h_hi = rl.get("health_range", [0.5, 1.0])
     reward_shape = a.reward_shape or rl.get("reward_shape", "bonus")
+    reward_over = {}
+    if a.reward_theta_weight is not None:
+        reward_over["reward_theta_weight"] = a.reward_theta_weight
+    if a.reward_tol_bonus is not None:
+        reward_over["reward_tol_bonus"] = a.reward_tol_bonus
+    eff = dict(rl)                      # effective reward config, for the log line
+    eff.update(reward_over)
     print(f"rl cfg: control_hz={control_hz} | episode_time={episode_time}s | "
           f"fault_mode={fault_mode} | health=[{h_lo},{h_hi}] | "
-          f"reward_shape={reward_shape} | tol={rl.get('reward_tol_deg')}deg "
-          f"(+{rl.get('reward_tol_bonus')}/step) | norm_reward={bool(a.norm_reward)}")
+          f"reward_shape={reward_shape} | tol={eff.get('reward_tol_deg')}deg "
+          f"(+{eff.get('reward_tol_bonus')}/step) | "
+          f"w_theta={eff.get('reward_theta_weight')} | norm_reward={bool(a.norm_reward)}")
 
     if a.device == "auto":
         # Measured on this machine (RTX 5060, n_envs=8): PPO+MlpPolicy = ~992 steps/s on
@@ -106,7 +125,7 @@ def main():
           f"| n_envs={a.n_envs}")
 
     mk = lambda i: make_env(a.seed + i, control_hz, episode_time, fault_mode,
-                            h_lo, h_hi, reward_shape)
+                            h_lo, h_hi, reward_shape, reward_over)
     if a.n_envs > 1:
         raw = SubprocVecEnv([lambda i=i: mk(i) for i in range(a.n_envs)])
     else:

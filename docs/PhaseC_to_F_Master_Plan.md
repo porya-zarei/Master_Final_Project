@@ -1,9 +1,9 @@
 # Phase C → F Master Plan — Authoritative Execution Roadmap
 
 ```text
-STATUS:                 PLAN FINALIZED
-EXECUTION AUTHORIZATION: C1 + C4.1 ONLY
-VERSION:                2  (supersedes v1 draft)
+STATUS:                 C1 ✅ / C4.1 ✅ / scoring-fix #3 ✅ EXECUTED  — C4.2 IN PROGRESS
+EXECUTION AUTHORIZATION: C4.2 ONLY  (USER DECISION 2, 2026-09-11; condition met by C4.1)
+VERSION:                2.1  (supersedes v1 draft)
 ```
 
 **Fault-Tolerant Attitude Control of Nanosatellites Using Reinforcement Learning: From Simulation to Hardware-in-the-Loop**
@@ -18,7 +18,8 @@ VERSION:                2  (supersedes v1 draft)
 > Finalizing this roadmap is **not** authorization to implement it.
 >
 > **Approval of Phase C does NOT mean approval of all of Phase C.**
-> The **only** currently authorized actions are **C1** and **C4.1** (§2).
+> **C1, C4.1 and the scoring fix (#3) are executed and pushed** (`1c1687b`, `2d9386b`).
+> The **only** currently authorized outstanding action is **C4.2** (§2.4.1).
 > Every other milestone in this document is *described* but **NOT authorized** (§0.4).
 > A task is not "done" because it appears in this plan.
 
@@ -83,7 +84,7 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 | C3a — O1-H privileged-health diagnostic | `[PLANNED]` |
 | C3b — O1-E estimated-health deployment experiment | `[PLANNED]` |
 | Complete observation sweep (O2/O3) | `[PLANNED]` |
-| C4.2 — controlled single-term/**scale** reward study | 🟩 **`[AUTHORIZED]`** 2026-09-11 — condition met (reward shaping is the material contributor); scope is *not* a reward redesign |
+| C4.2 — controlled single-term/**scale** reward study | 🟨 **`[AUTHORIZED — RUNNING]`** 2026-09-11 — condition met (reward shaping is the material contributor); scope is *not* a reward redesign; protocol §2.4.1 |
 | C6 — safety governor + LQR/B-dot fallback | `[PLANNED]` |
 | C2-e — full MEKF **or** documented estimator alternative | `[PLANNED]` |
 | C5 — fault-onset / plant uncertainty / final validation | `[PLANNED]` |
@@ -95,7 +96,7 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 | Phase D — MCU + HIL | `[PLANNED]` (after C) |
 | Phase E — thesis/defence freeze | `[PLANNED]` (after D) |
 | Phase F — JEPA / AdaJEPA | 🔵 `[OPTIONAL]` · `[NEVER-BLOCK]` |
-| **Not initially authorized:** full MEKF implementation · complete health-estimator integration · complete observation sweep · reward-v2 redesign · full recoverability oracle · large final Monte Carlo · SIL · MCU work · AdaJEPA | 🚫 **hold** |
+| **Not initially authorized:** full MEKF implementation · complete health-estimator integration · complete observation sweep · reward-v2 redesign · full recoverability oracle · large final Monte Carlo · SIL · MCU work · AdaJEPA | 🚫 **hold** — C4.2 (`tol_bonus`/`shape` only) is the **sole exception** |
 
 ### 0.5 Firm architectural decisions (not open for revision)
 
@@ -248,7 +249,7 @@ Verified by reading the code on 2026-09-11, not from memory.
 **Step ordering is load-bearing, not cosmetic.** See §2.6 for why the estimator work sits *after*
 attribution.
 
-### 2.2 STEP 1 — C1: truth and infrastructure 🟩 `[AUTHORIZED]`
+### 2.2 STEP 1 — C1: truth and infrastructure ✅ `[DONE — committed 1c1687b]`
 
 **Nothing else in this plan is trustworthy until C1 is done.**
 
@@ -282,7 +283,7 @@ attribution.
 >
 > **Do not hard-code an expected new success percentage anywhere in this project.**
 
-### 2.3 STEP 2 — C4.1: attribution of the existing Phase-B result 🟩 `[AUTHORIZED]`
+### 2.3 STEP 2 — C4.1: attribution of the existing Phase-B result ✅ `[DONE — committed 1c1687b]`
 
 **Purpose:** answer exactly one question — *why did Phase-B PPO improve from ≈ 4° to ≈ 0.17°?*
 
@@ -330,7 +331,64 @@ Concretely, the evidence should answer:
 4. Given (1)–(3), what is the minimum remaining C-I scope?
 5. How much compute is needed for the Monte Carlo (from the C1.3 throughput measurement)?
 
-Until this gate is passed, **steps 3–12 are not authorized.**
+**Gate A outcome (2026-09-11): passed.** C1 and C4.1 are complete with evidence, and the material
+contributor to the Phase-B gain is identified (reward shaping; A1 = −83.3 pp). Per USER DECISION 2
+**C4.2 is therefore justified and authorized**, and it runs *first* because the reward function is
+**upstream of the observation space** — freezing the reward now means the C2-h/C3 policies are
+trained once instead of twice. **Steps 3–12 remain not authorized** until separately approved.
+
+#### 2.4.1 STEP 2B — C4.2: form vs magnitude in the tolerance-bonus reward 🟨 `[AUTHORIZED · RUNNING]`
+
+**Scope:** a *single-term / single-scale* study. Explicitly **not** a reward redesign.
+
+**Why the question is well posed.** `bonus` is `quad` *plus a constant* `+1.0/step` while
+`θ < 1°`. A constant adds **no gradient**, so BASE and A1 have **identical gradients** at every
+θ. Verified numerically from the environment itself
+(`scripts/c4_2_reward_check.py`; reproduced inside `scripts/c4_2_reward_study.py`):
+
+| arm | r(1°) | r(0.5°) | dr/dθ @0.5° | max episode contribution |
+|---|---|---|---|---|
+| BASE `bonus +1.0` | −3.046e−04 | +9.999e−01 | −0.0175 /rad | **+4499.66** |
+| A1 `quad`         | −3.046e−04 | −7.615e−05 | −0.0175 /rad | −0.34 |
+
+⇒ the Phase-B gain is caused **entirely by a discontinuous step**, not by any gradient. Three
+mechanisms remain and the arms separate them:
+
+- **(F) form** — the indicator step itself (it monetises the exact threshold that defines success:
+  `reward_tol_deg = 1°` *is* the evaluation criterion);
+- **(M) magnitude** — the sheer size of the near-target reward;
+- **(G) gradient** — a steeper smooth near-target slope.
+
+**Arms** — each changes exactly one knob from a known reference:
+
+| arm | change | shape | `reward_tol_bonus` | isolates |
+|---|---|---|---|---|
+| BASE | — | bonus | 1.0 | reference (works) |
+| A1_quad | shape | quad | — | reference (fails) |
+| **S1_log** | shape | log | — | **(G)** smooth, bounded, 2626× steeper near target |
+| **S2_bonus_0p1** | `tol_bonus` | bonus | 0.1 | **(M)** step form kept, magnitude /10 |
+| **S3_bonus_tol2** | `tol_bonus` | bonus | 3.046e−04 | **(F)** step form kept, magnitude = quad's own penalty at 1° |
+
+S2/S3 give a **4370× dose–response span at fixed form**; S1 tests the gradient route.
+
+**Frozen:** 5 Hz · 900 s · 2M steps · `norm_reward=0` · `health_range [0.5,1]` · seed 0
+(Decision 1). Three new trainings (≈17 min each); the evaluation **imports the C4.1 harness**
+(`rollout_rl`/`aggregate`) rather than re-implementing it, at n=24 on the same ICs and both holds —
+so BASE and A1 are re-measured into the same table instead of copied from C4.1.
+
+**Interpretation fixed in advance** (so the result cannot be rationalised after the fact):
+
+| observation | conclusion |
+|---|---|
+| S3 succeeds | **form alone** suffices; magnitude irrelevant |
+| S3 fails, S2 succeeds | magnitude matters, but a small indicator step is enough |
+| S1 succeeds | a smooth steep-gradient reward suffices — **no threshold discontinuity needed** |
+| S1, S2, S3 all fail | the large step is genuinely doing the work |
+| S1 best | prefer it downstream: smooth, bounded, no discontinuity — better conditioned for the MCU (Phase D) |
+
+**Touches:** `scripts/c4_2_reward_study.py`, `scripts/c4_2_reward_check.py`, `scripts/train_rl.py`
+(two numeric reward overrides added), `results/c4_2/` (gitignored), `reports/figures/`, report section.
+**Does not touch:** the plant, the observation space, `health_range`, the allocator, the estimator, MEKF.
 
 ### 2.5 STEP 3 — C2-h: health-estimator investigation `[PLANNED]`
 
@@ -776,7 +834,7 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 
 | Gate | After | Decision |
 |---|---|---|
-| **Gate A** | C1 + C4.1 ✅ **reached** | Which of steps 3–12 are necessary; ~~is C4.2 justified~~ (**answered 2026-09-11: yes, authorized**); what N and compute are needed |
+| **Gate A** | C1 ✅ + C4.1 ✅ + #3 ✅ **PASSED 2026-09-11** | Contributor = reward shaping (−83.3 pp) ⇒ **C4.2 authorized and running** (§2.4.1). Steps 3–12 still require explicit, milestone-scoped approval |
 | **Gate B** | C3b (O1-E) | Are later observation sets (O2/O3) worth running, or is `h_hat` sufficient? |
 | **Gate C** | C7-lite | Is C7-full worth pursuing, or is C7-lite the final recoverability result? |
 | **Gate D** | end of C-I | **Freeze** — Baseline C-Final selected; C-II/SIL may begin |
@@ -788,7 +846,7 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 
 ## 11. Scope-cut rules (explicit)
 
-1. **C1 + C4.1 are the only authorized actions.** Everything else awaits Gate A.
+1. **C1, C4.1 and the scoring fix (#3) are executed. C4.2 is the only authorized outstanding action.** Steps 3–12 await explicit, milestone-scoped approval.
 2. **No reward redesign during attribution.** C4.2 comes after C4.1, and then **one term at a time** —
    never five new reward terms simultaneously.
 3. **`O1-H` and `O1-E` are separate experiments. Never merged.**
@@ -850,11 +908,11 @@ verification and analysis dominate. **Q5 (defence date) is required before any c
 
 ## 14. What "go" means right now
 
-**Authorized — C1 + C4.1 only:**
+**Executed — C1 ✅ + C4.1 ✅ + scoring fix #3 ✅** (committed `1c1687b`, `2d9386b`).
 
-1. **C1** — regenerate M1 and Phase 1B on the corrected time base; measure evaluation throughput;
-   report success rate, settling time, median, p90/p95 and final pointing error **separately**.
-2. **C4.1** — attribute the Phase-B improvement with controlled single-factor experiments.
+**Authorized now — C4.2 only** (§2.4.1): the controlled single-term/single-scale reward study
+(S1_log / S2_bonus_0p1 / S3_bonus_tol2 vs BASE / A1), 5 Hz · 900 s · 2M steps · seed 0,
+evaluated by the C4.1 harness at n=24 on the same ICs.
 
 **Not authorized:** full MEKF implementation · complete health-estimator integration · complete
 observation sweep · reward-v2 redesign · full recoverability oracle · large final Monte Carlo ·
@@ -864,5 +922,4 @@ Then: **Decision Gate A**.
 
 ---
 
-*Plan finalized for the repository. No implementation code, configuration or training has been
-produced by this document. Execution authorization: **C1 + C4.1 only**.*
+*Execution authorization at the time of writing: **C4.2 only**. C1, C4.1 and #3 are executed*
