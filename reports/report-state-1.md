@@ -119,22 +119,22 @@ Built a Python 3.14 venv with **Basilisk 2.11.1 + bsk_rl 1.3.0 + stable-baseline
 ### Step 4 — Phase-1 attitude env (`simulation/envs/adcs_env.py`)
 `ADCSSatellite` (bsk_rl) + `FaultToleranceWrapper` (reward + RW-lock & sensor-bias fault injection). Verified: **smoke test OK, `check_env` PASS**. Random rollout figure:
 
-![Phase-1 ADCS random rollout](../results/first_simulation.png)
+![Phase-1 ADCS random rollout](figures/phase1_first_simulation.png)
 
 ### Step 5 — Visualization of the attitude dynamics
 Animated the satellite body tumbling in 3D from the simulated MRP state:
 
-![Attitude animation](../results/satellite_animation.gif)
+![Attitude animation](figures/phase1_satellite_animation.gif)
 
 ### Step 6 — Orbit-around-Earth animation (ADCS env)
 Earth + orbit path + satellite with body-fixed attitude axes (fixed a km→m unit bug; orbit at ~1.08 RE):
 
-![Orbit + attitude](../results/orbit_attitude.gif)
+![Orbit + attitude](figures/phase1_orbit_attitude.gif)
 
 ### Step 7 — Earth-observing mission env (`simulation/envs/eo_imaging_env.py`)
 Faithful port of the **Nagano & Schaub** tasking environment onto the bsk_rl 1.3.0 API: imaging + charge actions, power/battery tracking, target-opportunity observations, `UniqueImageReward`, 50 targets. Verified: `Box(14)` obs, `Discrete(4)` actions, battery drains/recharges, episode truncates at the time limit.
 
-![Earth-observing satellite orbit + targets](../results/eo_orbit.gif)
+![Earth-observing satellite orbit + targets](figures/phase1_eo_orbit.gif)
 
 ### Step 8 — Vizard live 3D pipeline
 Confirmed `vizFound=True`; bsk_rl writes Protobuf `.bin` viz logs (`viz_output/`); downloaded and extracted the **Vizard Unity app** (`D:\Vizard\Vizard\Vizard.exe`, 133 MB) and launched it — it opened windows on the machine and rendered the 3D scene. Helper script `scripts/gen_vizard.py` regenerates `.bin` replays.
@@ -160,11 +160,11 @@ LQR + star-tracker estimator slews the satellite from random release to nadir. *
 | Settling time | mean **143 s** · median **103 s** · p90 **153 s** |
 | Final pointing error | mean **0.81°** |
 
-![M1 validation summary](../results/m1_validation_60/summary.png)
+![M1 validation summary](figures/phase1_m1_validation_60.png)
 
 Single-episode trajectory (pointing error over time, log scale):
 
-![Nadir acquisition episode](../results/nadir_acquisition_0.png)
+![Nadir acquisition episode](figures/phase1_nadir_acquisition.png)
 
 > **Honest deviation from plan:** the full MEKF with gyro-bias estimation was unstable during large-angle acquisition (attitude/bias observability coupling). M1 uses the **star tracker attitude directly** (0.003° accuracy at the 4 Hz control rate) with the gyro for rate. A fused MEKF with bias estimation is deferred to Phase 2. The ~27% non-settling cases are dominated by **reaction-wheel momentum saturation** — the next step is MTQ momentum management.
 

@@ -45,7 +45,7 @@ Identical to the M1 protocol — random initial attitude and random initial angu
 | **RW1 @ 50 % torque** | **86.7 %** | 136.8 s | **0.765°** | 11.54° |
 | **RW1 failed (dead)** | **0.0 %** | — | 41.77° | 42.51° |
 
-![Phase 1B fault experiment](../codes/results/fault_experiment/fault_summary.png)
+![Phase 1B fault experiment](figures/phase1b_fault_experiment.png)
 
 ### 1.3 Interpretation
 
@@ -90,7 +90,7 @@ Two design decisions worth recording:
 | Episode reward | −38.8 → −0.4 |
 | Learning curve | **converged** — flat after ~episode 750, low variance in the final third |
 
-![1 M-step learning curve](../codes/results/rl_1m/ppo_learning_curve.png)
+![1 M-step learning curve](figures/phase2_learning_curve_1m.png)
 
 Evaluation against LQR (n = 6, identical plant, allocator and 900 s horizon):
 
@@ -136,7 +136,7 @@ All of this is recorded in `docs/Phase2_RL_RewardShaping_Plan.md`.
 | Episodes | 440 |
 | Episode reward | −12 720.6 → **+3 021.1** (strongly positive = the satellite spends most of each episode inside tolerance) |
 
-![2 M-step shaped learning curve](../codes/results/rl_shaped/ppo_learning_curve.png)
+![2 M-step shaped learning curve](figures/phase2_learning_curve_2m_shaped.png)
 
 **Final comparison (n = 8, identical plant, allocator, initial conditions and 900 s horizon):**
 
@@ -146,11 +146,11 @@ All of this is recorded in `docs/Phase2_RL_RewardShaping_Plan.md`.
 | **RW1 @ 50 %** | **100 %** · **0.170°** | 75 % · 0.733° | RL 4× more accurate |
 | **RW1 dead** | **12.5 %** · 44.68° | **0 %** · 55.97° | **RL is the only controller that ever succeeds** |
 
-![RL vs LQR across fault cases](../codes/results/rl_eval_shaped/rl_vs_lqr.png)
+![RL vs LQR across fault cases](figures/phase2_rl_vs_lqr.png)
 
 The diagnostic confirms the mechanism — the policy now *regulates* instead of coasting:
 
-![Shaped-policy diagnostic](../codes/results/rl_diag_shaped/rl_diag.png)
+![Shaped-policy diagnostic](figures/phase2_diagnostic.png)
 
 | Settled behaviour (last 50 s) | Before | After |
 |---|---|---|
