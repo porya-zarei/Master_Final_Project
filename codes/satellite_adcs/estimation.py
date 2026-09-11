@@ -1,13 +1,19 @@
 """Attitude estimator: star-tracker attitude + gyro rate.
 
+NOT an MEKF. This is a placeholder: the class name is kept for interface symmetry
+with a future estimator, but `propagate()` is a no-op and `update_vector()` returns
+`self` -- there is no attitude/bias state and no covariance.
+
 M1 uses a star tracker that provides an absolute, high-accuracy attitude
-(noise ~5e-5 rad) at the control rate (4 Hz). The attitude estimate is therefore
-taken directly from the star tracker; the gyro provides the angular-rate
-estimate (omega_hat = measured gyro, bias small and neglected here).
+(noise ~5e-5 rad). The attitude estimate is therefore taken directly from the star
+tracker and, because `SensorSuite.measure()` is invoked once per control step, it is
+refreshed at the CONTROL rate (5 Hz) -- not at the `simulation.estimator_hz` value,
+which no code path currently reads. The gyro supplies the angular-rate estimate
+(omega_hat = measured gyro); the gyro bias is NOT estimated and is neglected here.
 
 This avoids the attitude/bias observability coupling that can make a fused MEKF
-unstable during large-angle acquisition. A full MEKF with gyro-bias estimation
-can be layered in later (Phase 2) once the acquisition loop is validated.
+unstable during large-angle acquisition. A full MEKF with gyro-bias estimation is a
+later milestone (see docs/PhaseC_to_F_Master_Plan.md, SS C-I).
 """
 from __future__ import annotations
 import numpy as np

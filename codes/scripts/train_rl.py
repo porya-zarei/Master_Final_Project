@@ -27,9 +27,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 
 
-def make_env(seed, control_hz, episode_time, fault_mode, health_lo, health_hi):
+def make_env(seed, control_hz, episode_time, fault_mode, health_lo, health_hi,
+             reward_shape=None):
+    # reward_shape is a diagnostic override used by the C4.1 attribution study;
+    # None -> use the value from rl.yaml (behaviour unchanged for every other caller).
+    ov = {"rl": {"reward_shape": reward_shape}} if reward_shape else None
     return ADCSEnv(fault_mode=fault_mode, health_range=(health_lo, health_hi),
-                   control_hz=control_hz, episode_time=episode_time, seed=seed)
+                   control_hz=control_hz, episode_time=episode_time, seed=seed,
+                   overrides=ov)
 
 
 class EpisodeRewardLogger(BaseCallback):
@@ -72,6 +77,8 @@ def main():
                    choices=["none", "random_health", "random_discrete", "dead_wheel"])
     p.add_argument("--norm_reward", type=int, default=0, choices=[0, 1],
                    help="VecNormalize reward normalization (0 = keep shaped signal)")
+    p.add_argument("--reward_shape", default=None, choices=["quad", "log", "bonus"],
+                   help="reward shaping override (C4.1 attribution); default from rl.yaml")
     a = p.parse_args()
 
     os.makedirs(a.out, exist_ok=True)
@@ -81,9 +88,10 @@ def main():
     episode_time = a.episode_time if a.episode_time is not None else float(rl.get("episode_time_s", 900.0))
     fault_mode = a.fault_mode or rl.get("fault_mode", "random_health")
     h_lo, h_hi = rl.get("health_range", [0.5, 1.0])
+    reward_shape = a.reward_shape or rl.get("reward_shape", "bonus")
     print(f"rl cfg: control_hz={control_hz} | episode_time={episode_time}s | "
           f"fault_mode={fault_mode} | health=[{h_lo},{h_hi}] | "
-          f"reward_shape={rl.get('reward_shape')} | tol={rl.get('reward_tol_deg')}deg "
+          f"reward_shape={reward_shape} | tol={rl.get('reward_tol_deg')}deg "
           f"(+{rl.get('reward_tol_bonus')}/step) | norm_reward={bool(a.norm_reward)}")
 
     if a.device == "auto":
@@ -97,7 +105,8 @@ def main():
     print(f"device: {device} | torch {torch.__version__} | cuda {torch.version.cuda} "
           f"| n_envs={a.n_envs}")
 
-    mk = lambda i: make_env(a.seed + i, control_hz, episode_time, fault_mode, h_lo, h_hi)
+    mk = lambda i: make_env(a.seed + i, control_hz, episode_time, fault_mode,
+                            h_lo, h_hi, reward_shape)
     if a.n_envs > 1:
         raw = SubprocVecEnv([lambda i=i: mk(i) for i in range(a.n_envs)])
     else:
@@ -125,7 +134,7 @@ def main():
         ax.set_xlabel("episode")
         ax.set_ylabel("episode reward")
         ax.set_title(f"{a.algo.upper()} — fault-randomized ADCS "
-                     f"(shape={rl.get('reward_shape')})")
+                     f"(shape={reward_shape})")
         ax.grid(alpha=0.3)
         fig.tight_layout()
         fig.savefig(os.path.join(a.out, f"{a.algo}_learning_curve.png"), dpi=120)
