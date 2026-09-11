@@ -76,13 +76,14 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 | Item | Status |
 |---|---|
 | M0 simulator · M1 LQR · Phase 1B fault model · Phase 2 shaped PPO vs LQR | `[DONE]` |
-| **C1 — truth/regeneration on the corrected time base** | 🟩 **`[AUTHORIZED]`** |
-| **C4.1 — attribution of the Phase-B improvement** | 🟩 **`[AUTHORIZED]`** |
+| **C1 — truth/regeneration on the corrected time base** | ✅ **`[DONE]`** — `results/c1_regeneration/`, report §1 |
+| **C4.1 — attribution of the Phase-B improvement** | ✅ **`[DONE]`** — 6 arms × 3 cases × 24 ICs, report §3 |
+| **Scoring-criterion fix + n=8 → n=24 re-measure** (was G7, plus the hold defect) | ✅ **`[DONE]`** 2026-09-11 — `results/rl_eval_matched/`, report-2 §6 |
 | C2-h — health-estimator investigation + integration | `[PLANNED]` |
 | C3a — O1-H privileged-health diagnostic | `[PLANNED]` |
 | C3b — O1-E estimated-health deployment experiment | `[PLANNED]` |
 | Complete observation sweep (O2/O3) | `[PLANNED]` |
-| C4.2 — optional reward refinement (incremental) | `[PLANNED]` / `[OPTIONAL]` |
+| C4.2 — controlled single-term/**scale** reward study | 🟩 **`[AUTHORIZED]`** 2026-09-11 — condition met (reward shaping is the material contributor); scope is *not* a reward redesign |
 | C6 — safety governor + LQR/B-dot fallback | `[PLANNED]` |
 | C2-e — full MEKF **or** documented estimator alternative | `[PLANNED]` |
 | C5 — fault-onset / plant uncertainty / final validation | `[PLANNED]` |
@@ -109,6 +110,12 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 9. The deployed policy **never receives `h_true`** — it uses estimated actuator health `h_hat`.
 10. **ESP32-S3 is the preferred MCU/HIL target** — an experimental embedded-control and HIL
     platform, **not a flight-qualified spacecraft OBC** (see §5.1).
+11. **Canonical training configuration is FROZEN at 5 Hz / 900 s** (2026-09-11). Do **not**
+    re-baseline around 2 Hz or 300 s. The A3 result (a 5 Hz policy evaluated at 2 Hz) is retained
+    **only** as a deployment-rate robustness experiment — never as the training rate. Rationale:
+    `config/rl.yaml:control_hz` is coupled to the LQR rate *by design*, so lowering it drags the
+    classical baseline with it and makes the RL-vs-LQR claim rate-dependent; and a 300 s horizon
+    biases against slow initial conditions because `settling_time` requires `i + steps <= n`.
 
 ### 0.6 Why the current PPO is not freezable as-is
 
@@ -122,6 +129,14 @@ Freezing the existing policy as "the reference architecture" would bake four def
 | The gain came from **5 simultaneous changes** → demonstrated but **unattributed** | Phase-B history |
 
 **Removing these four defects is what Phase C is for.**
+
+> **Status 2026-09-11 — 2 of the 4 are closed, and row (iii) understated itself.** (iii) is fixed:
+> Phase-2 is now scored at **n = 24** under a hold-matched criterion. (iv) is fixed: C4.1
+> attributed the gain (§3). (i) and (ii) remain open and are precisely what C2-h / C3a / C3b
+> address. On (iii): as well as a small *n*, the two controllers were scored under **different**
+> settling holds (RL `hold=10 s` vs LQR `hold=30 s` — a 3× stricter criterion for LQR), so the
+> published success column was not like-for-like. The **precision** column (final error) never
+> depended on the hold and was unaffected.
 
 ### 0.7 What changed in v2 (vs the superseded v1 draft)
 
@@ -163,7 +178,7 @@ Verified by reading the code on 2026-09-11, not from memory.
 | RL env: 9-dim obs, 3-dim action (desired torque) | `adcs_env.py` | `Box(-10,10,(9,))`, `Box(-1,1,(3,))` |
 | Shaped reward `−‖θ‖² − 0.1‖ω_err‖² − 0.01‖a‖² + 1·1[‖θ‖<1°]` | `adcs_env.py:126` | YAML knobs in `config/rl.yaml` |
 | Time-axis fix | `simulate.py:50` | **in code** (`nctrl = max(1, round((1/hz)/dt))`, `t += ctrl_period`) |
-| Phase-B result: PPO beats LQR on all 3 fault cases | `results/rl_eval_shaped/` | 100%/0.17° vs 75%/0.73°; dead wheel 12.5% vs 0% |
+| Phase-B result: PPO beats LQR on all 3 fault cases | `results/rl_eval_shaped/` | 100%/0.17° vs 75%/0.73°; dead wheel 12.5% vs 0% — **⚠️ n = 8 and a mismatched settling hold; superseded by the matched n = 24 re-measure** (`results/rl_eval_matched/`, report-2 §6) |
 
 > Milestones above are marked `[DONE]` **because they were run and produced evidence.**
 > Nothing else in this document may be marked done on the strength of being described here.
@@ -178,7 +193,7 @@ Verified by reading the code on 2026-09-11, not from memory.
 | **G4** | **Health is constant for the whole episode.** Sampled once in `reset()`. | `adcs_env.py:152` | No fault onset ⇒ no detection time, adaptation transient, or recovery metric |
 | **G5** | **Reward has no safety / saturation / rate terms.** `w_ctrl` penalizes the **normalized action `a`**, not physical torque; no wheel-speed penalty; no `Δτ` penalty. | `adcs_env.py:126–142` | Nothing discourages wheel saturation or jerky torque — both undesirable on an MCU |
 | **G6** | **No safety governor, no fallback.** Action is clipped to `[-1,1]`; nothing else supervises it. | `adcs_env.py:162` | Required before deployment. The validated `ADCSController` (B-dot+LQR) exists but is **not wired to the RL path** |
-| **G7** | **Evaluation is n = 8.** | `eval_rl_vs_lqr.py --n 8` | Not a defensible headline number |
+| ~~**G7**~~ | ~~**Evaluation is n = 8.**~~ **CLOSED 2026-09-11** — evaluation is now **n = 24** under a **matched** settling hold: RL used 10 s while LQR silently used 30 s, so LQR was judged 3× stricter; both are now scored at 10 s *and* 30 s. | `eval_rl_vs_lqr.py` `HOLDS = (10.0, 30.0)`; `results/rl_eval_matched/` | ✅ Resolved — `reports/report-state-2.md` §6 |
 | **G8** | **M1 and Phase-1B numbers predate the time-axis fix.** | `results/m1_validation_60/` (Sep 8), `results/fault_experiment/` (Sep 10); fix landed in `4502482` | **Corrected interpretation (v1 was wrong):** the time-axis bug primarily **inflated settling-time measurements**. Success is **threshold-based** (reached tolerance within horizon) and therefore **should not automatically change** because of the time-axis correction. The previously quoted **83.3% and 75% also came from different sample sizes (n = 6 vs n = 8)**. Any change in success after regeneration must be **measured and attributed to the actual experiment/configuration** — never silently credited to the time-base fix. |
 | **G9** | **Aero / SRP / residual-dipole torques are flags with no implementation.** | `dynamics.py:71–73` read the flags; `disturbance_torque()` (line 136) returns **gravity-gradient only** (`# add later if needed`) | Enabling them in YAML currently does **nothing**; their effects cannot be claimed |
 | **G10** | **No plant uncertainty.** Only fault health is randomized. | `satellite.yaml`, `actuators.yaml` | A controller robust to faults but not to a ±10% inertia error is not deployable |
@@ -743,15 +758,17 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 | **Q2 — recoverability framing** | **Accepted** |
 | **Q3 — plant uncertainty** | **Separate measured variant; not silently mixed into the frozen baseline** |
 | **Q4 — frozen JEPA+MPC** | **Only required if Phase F is executed** |
-| **Q5 — defence date** | ⚠️ **STILL REQUIRED — schedule-critical input** |
+| **Q5 — defence date** | ✅ **RESOLVED 2026-09-11 — "i have enough time so do not consider it". Removed from the critical path.** |
+| **Q7 — canonical training rate / horizon** | ✅ **RESOLVED 2026-09-11 — frozen at 5 Hz / 900 s; no re-baseline** (§0.5 item 11) |
+| **Q8 — C4.2 reward study** | ✅ **AUTHORIZED 2026-09-11 — condition met. Small controlled single-term/scale study; NOT a reward redesign.** |
 | **Q6 — hardware bench** | **Assume MCU/simulation HIL initially; physical actuator bench optional** |
 
-> ### ⚠️ Q5 is the only decision that genuinely blocks planning
+> ### ✅ Q5 resolved 2026-09-11 — nothing in this plan is schedule-blocked
 >
-> **The defence date is a schedule-critical input and is still outstanding.** Without it, the
-> C / D / E scope cannot be sized against the optional Phase F, and no milestone can be placed on a
-> calendar. Everything else in this plan can proceed to Decision Gate A without it — **but the
-> decision of whether Phase F is attempted at all cannot be made without it.**
+> **Pouria: "for Q5 i have enough time so do not consider it."** Time is therefore *not* a ranking
+> input: D/E/F are scoped by **what the work requires**, not by what fits a deadline, and Phase F
+> no longer needs a calendar argument to justify itself. Gate G is retired. Every remaining
+> milestone is blocked only by its own technical precondition or by authorization — never by time.
 
 ---
 
@@ -759,13 +776,13 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 
 | Gate | After | Decision |
 |---|---|---|
-| **Gate A** | C1 + C4.1 | Which of steps 3–12 are necessary; is C4.2 justified; what N and compute are needed |
+| **Gate A** | C1 + C4.1 ✅ **reached** | Which of steps 3–12 are necessary; ~~is C4.2 justified~~ (**answered 2026-09-11: yes, authorized**); what N and compute are needed |
 | **Gate B** | C3b (O1-E) | Are later observation sets (O2/O3) worth running, or is `h_hat` sufficient? |
 | **Gate C** | C7-lite | Is C7-full worth pursuing, or is C7-lite the final recoverability result? |
 | **Gate D** | end of C-I | **Freeze** — Baseline C-Final selected; C-II/SIL may begin |
 | **Gate E** | C-II (SIL) | Enter Phase D (MCU/HIL) |
 | **Gate F** | Phase E start | Is there time for Phase F? If yes, F runs **without** touching C/D/E |
-| **Gate G** | any time | Q5 (defence date) arrives → re-scope D/E/F immediately |
+| ~~Gate G~~ | — | **Retired 2026-09-11** — Q5 resolved; no deadline pressure |
 
 ---
 

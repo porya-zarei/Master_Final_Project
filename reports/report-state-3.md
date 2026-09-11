@@ -474,3 +474,20 @@ stands in the winner is carrying weight):
   headline to n=24 moved the winner's dead-wheel row from **12.5 % / 44.7°** to
   **20.8 % / 44.0°** — the earlier sample was too small to publish, and every dead-wheel
   number in this thesis should be re-quoted at n=24.
+
+---
+
+## 4. Pointer — the Phase-2 success column has been re-measured (erratum)
+
+`eval_rl_vs_lqr.py` scored the RL side at `hold = 10 s` while LQR silently used the library default
+`hold = 30 s` — i.e. **LQR was judged against a 3× stricter settling criterion**. Both controllers
+are now scored under **both** holds in one run, at **n = 24** (`codes/results/rl_eval_matched/`).
+The direction of every conclusion is unchanged; the margins shrink.
+
+> **The dead-wheel figure of 20.8 % quoted above is the `hold = 10 s` value. Under the matched
+> strict criterion (`hold = 30 s`) it is 4.2 % — one initial condition out of 24.** Every dead-wheel
+> number must now be quoted **with its hold**, or it is ambiguous.
+
+Full corrected table, the hold sensitivity of each controller, and the cross-validation against the
+C4.1 harness: **`reports/report-state-2.md` §6 (Erratum)**.
+

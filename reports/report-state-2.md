@@ -212,3 +212,66 @@ MIL ─────────────────────────�
 5. **Phase 4:** the adaptive AdaJEPA-style model with a safety gate, evaluated specifically on **unseen fault severities** — the thesis's novelty claim.
 
 **Final goal (unchanged):** a learning-based, fault-tolerant attitude controller that (a) acquires and holds nadir pointing to sub-degree accuracy, (b) recovers under reaction-wheel degradation and total failure, (c) generalizes to fault modes unseen during training, and (d) is validated through the full **MIL → SIL → HIL** chain — with the **adaptive world-model + MPC** as the novel contribution against the PPO/SAC and frozen-MPC baselines.
+
+---
+
+## 6. Erratum (2026-09-11) — matched settling criterion and n = 24
+
+**What was wrong.** §2.6 above describes the final comparison as using "identical plant, allocator,
+initial conditions and 900 s horizon". That was true of the *plant* — but **not of the scoring
+criterion**. `eval_rl_vs_lqr.py` scored the RL side with `settling_time(..., hold=10.0)` while the
+LQR side silently inherited the library default `hold=30.0`. The *hold* is how long the error must
+stay inside the 1° band before the episode counts as settled, so **LQR was judged against a 3×
+stricter criterion than RL**. A shorter hold is easier to satisfy, so the published success column
+flattered RL. The precision column (final pointing error) never used the hold and is unaffected.
+
+**The fix.** Both controllers are now scored under **both** holds in the same run
+(`HOLDS = (10.0, 30.0)`), the hold is passed explicitly at both call sites, and the horizon stays
+matched at 900 s (`--lqr_T 900`, applied to both paths). `--n` was raised 8 → 24, closing **G7**.
+
+**Corrected numbers** (`codes/results/rl_eval_matched/`, n = 24, 900 s @ 5 Hz):
+
+| Case | RL (h = 10 s) | RL (h = 30 s) | LQR (h = 10 s) | LQR (h = 30 s) |
+|---|---|---|---|---|
+| Healthy | 100 % · 0.18° | **100 % · 0.18°** | 91.7 % · 0.71° | **83.3 % · 0.71°** |
+| RW1 @ 50 % | 100 % · 0.16° | **100 % · 0.16°** | 91.7 % · 0.71° | **83.3 % · 0.71°** |
+| RW1 dead | 20.8 % · 44.04° | **4.2 % · 44.04°** | 0 % · 68.34° | **0 % · 68.34°** |
+
+![RL vs LQR under a matched settling criterion](figures/phase2_rl_vs_lqr_matched.png)
+
+**What changes, and what does not.**
+
+- **The direction of every conclusion survives at both holds.** RL still wins all three cases on
+  both success and precision. The claim is now *hold-robust* rather than hold-dependent.
+- The **margins shrink** once the criterion is matched. Against the strict hold = 30 s criterion:
+  healthy 100 % vs 83.3 % (published as 100 % vs 75 %), RW1 @ 50 % 100 % vs 83.3 %, dead wheel
+  4.2 % vs 0 % (published as 12.5 % vs 0 %). Since the published LQR figure *was already* a
+  hold = 30 s number, the LQR side barely moves (75 % at n = 8 → 83.3 % at n = 24); what moves is
+  that RL is now held to the same standard.
+- **The dead-wheel margin is one initial condition** — literally 1 of 24 here, and 1 of 8 as
+  published. "RL is the only controller that ever succeeds" remains true, but it must be stated as
+  a **single-IC** result, not as a rate (see **G11**: some ICs are physically unreachable under a
+  dead wheel, so counting them as controller failures is itself wrong).
+- **The RL policy is hold-insensitive** — 100 % at both holds in both healthy cases, with median
+  settle 68–83 s and p90 ≈ 91–154 s: once it is inside 1° it stays inside for 30 s. Only the
+  dead-wheel case is hold-sensitive (20.8 % → 4.2 %), because there the policy reaches 1° briefly
+  in 5 of 24 ICs but *holds* it in only 1.
+- **LQR is hold-sensitive in the expected direction** (91.7 % → 83.3 %), which confirms the defect
+  was real rather than cosmetic.
+- The dead-wheel **final error also moved** with the larger sample: LQR 55.97° → 68.34°. The n = 8
+  value was optimistic. RL's 44.68° → 44.04° was not.
+- The **precision comparison is unchanged**: ≈0.18° vs ≈0.71°, a factor of ~4.
+
+**A presentation correction (not a substance correction) to §2.6.** The published rows showed RL
+healthy and RL RW1 @ 50 % as identical (both "0.170°"). The raw artifacts hold them at **0.16980°**
+and **0.17045°** — different, but rounded to the same three decimals. The near-equality is genuine
+and meaningful: the fault-tolerant allocator compensates a 50 % wheel degradation almost exactly,
+which is why neither controller's performance moves at all between those two cases. Reporting both
+hold columns makes the two rows distinguishable at a glance.
+
+**Cross-validation.** This run independently reproduces the C4.1 BASE arm, which was written as a
+separate script: dead wheel h10 = 20.83 % (C4.1: 20.83 %), h30 = 4.17 % (C4.1: 4.17 %), final
+44.043° (C4.1: 44.0432°). Agreement to **four significant figures** across two independently
+written scoring harnesses is strong evidence that both are correct and that the hold was the only
+real difference between them.
+
