@@ -20,6 +20,7 @@ def load_config(overrides: dict | None = None) -> dict:
         "sensors": _load(os.path.join(CONFIG_DIR, "sensors.yaml")),
         "disturbances": _load(os.path.join(CONFIG_DIR, "disturbances.yaml")),
         "simulation": _load(os.path.join(CONFIG_DIR, "simulation.yaml"))["simulation"],
+        "rl": _load(os.path.join(CONFIG_DIR, "rl.yaml"))["rl"],
     }
     if overrides:
         _merge(cfg, overrides)

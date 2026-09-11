@@ -45,8 +45,10 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True):
     est.P = np.eye(3) * 1e-2
 
     dt = sim["dt_s"]
-    ctrl_period = 1.0 / sim["control_hz"]
-    nctrl = max(1, int(round(ctrl_period / dt)))
+    # integer substeps per control period; the EFFECTIVE period is nctrl*dt, so
+    # the labeled time axis equals the simulated time (both RL env and LQR).
+    nctrl = max(1, int(round((1.0 / sim["control_hz"]) / dt)))
+    ctrl_period = nctrl * dt
     t = 0.0
     t_arr, pe, om, ow, ph = [], [], [], [], []
     while t < T:

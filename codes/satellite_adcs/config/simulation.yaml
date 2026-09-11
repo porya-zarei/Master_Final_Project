@@ -1,7 +1,8 @@
 simulation:
   dt_s: 0.1                         # dynamics integrator step
   dynamics_hz: 10
-  control_hz: 4                     # LQR runs at 4 Hz
+  control_hz: 5.0                   # LQR control rate. dt_s=0.1 -> 2 substeps = 0.2 s,
+                                    # so the EFFECTIVE rate is 1/(2*0.1) = 5 Hz (keep them equal)
   estimator_hz: 4                   # MEKF update at 4 Hz
   episode_duration_s: 1200.0        # 20 min episode
   random_seed: 42

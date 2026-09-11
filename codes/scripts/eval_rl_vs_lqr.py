@@ -33,7 +33,7 @@ SETTLE_DEG = 1.0
 
 def eval_rl(model, vecnorm, health, n, T=300.0):
     """Roll the policy on the env with a fixed wheel health; return metrics."""
-    env = ADCSEnv(fault_mode="none", control_hz=2.0, episode_time=T, seed=0)
+    env = ADCSEnv(fault_mode="none", episode_time=T, seed=0)
     pes, settled = [], []
     for ep in range(n):
         env.reset(seed=ep)
@@ -52,7 +52,7 @@ def eval_rl(model, vecnorm, health, n, T=300.0):
             pe_series.append(info["pointing_error_deg"])
             done = term or trunc
         pe_series = np.array(pe_series)
-        step = 1.0 / 2.0
+        step = env.control_period
         t = np.arange(1, len(pe_series) + 1) * step
         st = settling_time(t, pe_series, threshold=SETTLE_DEG, hold=10.0)
         pes.append(pe_series[-1])
@@ -72,7 +72,8 @@ def main():
 
     os.makedirs(a.out, exist_ok=True)
     cfg = load_config()
-    model = (PPO.load(a.model) if "ppo" in a.model.lower() else SAC.load(a.model))
+    model = (PPO.load(a.model, device="cpu") if "ppo" in a.model.lower()
+             else SAC.load(a.model, device="cpu"))
     vecnorm = VecNormalize.load(a.vecnorm, DummyVecEnv([lambda: ADCSEnv()])) \
         if os.path.exists(a.vecnorm) else None
 

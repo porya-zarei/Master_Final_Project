@@ -1,0 +1,16 @@
+rl:
+  # ---- environment (RL baselines, Phase 2) ----
+  control_hz: 5.0            # MUST match the effective simulation.control_hz (LQR) rate
+  episode_time_s: 900.0      # training horizon == evaluation horizon (no distribution shift)
+  tau_scale: 1.0             # action -> desired body torque:  a * tau_scale * rw_max_torque
+  fault_mode: random_health  # none | random_health | random_discrete | dead_wheel
+  health_range: [0.5, 1.0]   # per-wheel health h in [0,1]; tau_actual = h * tau_command
+
+  # ---- reward shaping ----
+  # r = shape(theta) - w_rate*|omega_err|^2 - w_ctrl*|u|^2  (+ tolerance bonus)
+  reward_shape: bonus        # quad | log | bonus
+  reward_theta_weight: 1.0
+  reward_rate_weight: 0.1
+  reward_control_weight: 0.01
+  reward_tol_deg: 1.0        # success threshold (matches the evaluation criterion)
+  reward_tol_bonus: 1.0      # per-step bonus while ||theta|| < reward_tol_deg

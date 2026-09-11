@@ -2,8 +2,18 @@
 
 Action  : desired body torque (3) in [-1,1] -> tau_des = a * tau_scale * rw_max_torque
 Obs (9) : pointing error (rotvec, 3) + body-rate error (3) + wheel speeds (3)
-Reward  : -(|theta|^2 + 0.1*|omega_err|^2 + 1e-2*|u|^2)
+Reward  : shape(||theta||) - w_rate*||omega_err||^2 - w_ctrl*||u||^2
+          with an optional per-step tolerance bonus  (config: satellite_adcs/config/rl.yaml)
 Faults  : randomized reaction-wheel health per episode (fault_mode).
+
+Reward shapes (config key `rl.reward_shape`):
+  - "quad"  : r = -w_theta*||theta||^2 - ...      (classic quadratic, flat near zero)
+  - "log"   : r = -log(1 + ||theta||^2/theta_tol^2) - ...  (steep near zero)
+  - "bonus" : "quad" + reward_tol_bonus while ||theta|| < reward_tol_deg
+
+Why shaping: the quadratic cost is dominated by the acquisition transient, so the
+fine-pointing regime provides almost no gradient. The log/bonus shapes restore the
+learning signal exactly where precision matters (see docs/Phase2_RL_RewardShaping_Plan.md).
 
 The low-level fault-tolerant allocator (health inversion + MTQ residual +
 momentum desaturation) is shared with the LQR controller, so the LQR and the RL
@@ -26,16 +36,34 @@ from ..quaternion import quat_error, theta_vec, quat_to_dcm
 class ADCSEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, cfg=None, fault_mode="random_health", health_range=(0.5, 1.0),
-                 control_hz=2.0, episode_time=300.0, tau_scale=1.0, seed=None,
+    def __init__(self, cfg=None, fault_mode=None, health_range=None,
+                 control_hz=None, episode_time=None, tau_scale=None, seed=None,
                  overrides=None):
         self.cfg = cfg if cfg is not None else load_config(overrides)
         sim = self.cfg["simulation"]
+        rl = self.cfg.get("rl", {}) or {}
+
+        # -- config-driven defaults (explicit args / CLI flags still win) --------
+        if fault_mode is None:
+            fault_mode = rl.get("fault_mode", "random_health")
+        if health_range is None:
+            health_range = tuple(rl.get("health_range", [0.5, 1.0]))
+        if control_hz is None:
+            control_hz = float(rl.get("control_hz", sim["control_hz"]))
+        if episode_time is None:
+            episode_time = float(rl.get("episode_time_s", 900.0))
+        if tau_scale is None:
+            tau_scale = float(rl.get("tau_scale", 1.0))
+
         self.dt = sim["dt_s"]
-        self.control_period = 1.0 / control_hz
-        self.n_sub = max(1, int(round(self.control_period / self.dt)))
-        self.max_steps = int(round(episode_time / self.control_period))
-        self.tau_scale = tau_scale
+        # integer number of integrator substeps per control period; the effective
+        # period is n_sub*dt so the simulated horizon is exactly `episode_time`
+        self.n_sub = max(1, int(round((1.0 / float(control_hz)) / self.dt)))
+        self.control_period = self.n_sub * self.dt
+        self.control_hz = 1.0 / self.control_period
+        self.max_steps = int(round(float(episode_time) / self.control_period))
+        self.episode_time = float(episode_time)
+        self.tau_scale = float(tau_scale)
 
         rw = self.cfg["actuators"]["reaction_wheels"]
         self.rw_max_torque = rw["max_torque_Nm"]
@@ -46,6 +74,14 @@ class ADCSEnv(gym.Env):
 
         self.fault_mode = fault_mode
         self.health_range = health_range
+
+        # -- reward shaping (config-driven) -------------------------------------
+        self.reward_shape = str(rl.get("reward_shape", "bonus")).lower()
+        self.w_theta = float(rl.get("reward_theta_weight", 1.0))
+        self.w_rate = float(rl.get("reward_rate_weight", 0.1))
+        self.w_ctrl = float(rl.get("reward_control_weight", 1e-2))
+        self.reward_tol_rad = float(np.radians(rl.get("reward_tol_deg", 1.0)))
+        self.reward_tol_bonus = float(rl.get("reward_tol_bonus", 1.0))
 
         self.rng = np.random.default_rng(seed if seed is not None else sim["random_seed"])
         self.dyn = SpacecraftDynamics(self.cfg, self.rng)
@@ -87,6 +123,24 @@ class ADCSEnv(gym.Env):
         nadir = -self.dyn.r / np.linalg.norm(self.dyn.r)
         return float(np.degrees(np.arccos(np.clip(zB @ nadir, -1, 1))))
 
+    def _reward(self, theta, omega_err, a):
+        """Config-driven shaped reward; returns (reward, components-dict)."""
+        theta2 = float(theta @ theta)
+        rate2 = float(omega_err @ omega_err)
+        ctrl2 = float(a @ a)
+        if self.reward_shape == "log":
+            eps = max(self.reward_tol_rad ** 2, 1e-12)
+            r_err = -float(np.log1p(theta2 / eps))
+        else:                                              # "quad" | "bonus"
+            r_err = -self.w_theta * theta2
+        reward = r_err - self.w_rate * rate2 - self.w_ctrl * ctrl2
+        in_tol = float(np.linalg.norm(theta)) < self.reward_tol_rad
+        if self.reward_shape == "bonus" and in_tol:
+            reward += self.reward_tol_bonus
+        comp = {"r_err": r_err, "r_rate": -self.w_rate * rate2,
+                "r_ctrl": -self.w_ctrl * ctrl2, "in_tol": float(in_tol)}
+        return float(reward), comp
+
     # ---------------------------------------------------------------- gym API
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -126,13 +180,13 @@ class ADCSEnv(gym.Env):
         theta = theta_vec(q_err)
         omega_err = self.est.gyro_rate(self._last_gyro) - quat_to_dcm(q_err) @ wr
 
-        reward = -(float(theta @ theta) + 0.1 * float(omega_err @ omega_err)
-                   + 1e-2 * float(a @ a))
+        reward, comp = self._reward(theta, omega_err, a)
         self._step_count += 1
         truncated = self._step_count >= self.max_steps
         info = {
             "rw_health": self.dyn.rw_health.copy(),
             "pointing_error_deg": self.pointing_error_deg(),
             "theta_rad": float(np.linalg.norm(theta)),
+            "reward_components": comp,
         }
         return self._obs(), reward, False, truncated, info
