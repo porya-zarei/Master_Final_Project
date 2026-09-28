@@ -491,3 +491,96 @@ The direction of every conclusion is unchanged; the margins shrink.
 Full corrected table, the hold sensitivity of each controller, and the cross-validation against the
 C4.1 harness: **`reports/report-state-2.md` §6 (Erratum)**.
 
+
+---
+
+## 5. C4.2 — form vs magnitude in the tolerance-bonus reward
+
+Authorized 2026-09-11 (USER DECISION 2) *because* C4.1 identified reward shaping as the material
+contributor (A1 = −83.3 pp). Scope: a **single-term / single-scale** study — explicitly not a
+reward redesign. Protocol: `docs/PhaseC_to_F_Master_Plan.md` §2.4.1. Driver:
+`codes/scripts/c4_2_reward_study.py`, which **imports the C4.1 scoring functions** so that the
+settling definition, both holds and the 24 initial conditions are identical.
+
+### 5.1 Why the question is well posed
+
+`bonus` is `quad` **plus a constant** `+1.0/step` while θ < 1°. A constant adds **no gradient**, so
+BASE and A1 have *identical* gradients at every θ (−0.0175 /rad at 0.5°), while their maximum
+episode contributions are **+4499.66** and **−0.34**. The Phase-B gain is therefore produced by a
+discontinuous step, not by any gradient — which leaves three separable mechanisms: **form** (the
+indicator itself), **magnitude**, and **gradient**. Each arm changes exactly one knob from a known
+reference:
+
+| arm | change | shape | `reward_tol_bonus` | max episode contribution | isolates |
+|---|---|---|---|---|---|
+| BASE | — | bonus | 1.0 | +4499.66 | reference |
+| A1_quad | shape | quad | — | −0.34 | reference |
+| S1_log | shape | log | — | −1004.15 | **gradient** |
+| S2_bonus_0p1 | `tol_bonus` | bonus | 0.1 | +449.66 | **magnitude** |
+| S3_bonus_tol2 | `tol_bonus` | bonus | 3.046e−04 | +1.03 | **form alone** |
+
+S2/S3 span a 4370× dose range at fixed form. The interpretation was **fixed in advance** in the plan
+so the result could not be rationalised after the fact.
+
+### 5.2 Result — n = 24, same ICs, both holds (5 Hz / 900 s / 2 M steps / seed 0)
+
+| arm | healthy: h10 / h30 / final | RW1 @ 50 %: h10 / h30 / final | RW1 dead: h10 / h30 / final |
+|---|---|---|---|
+| BASE | 100 % / 100 % / 0.18° | 100 % / 100 % / 0.16° | 20.8 % / 4.2 % / 44.04° |
+| A1_quad | 16.7 % / 16.7 % / 2.16° | 20.8 % / 20.8 % / 2.08° | 4.2 % / 0 % / 54.77° |
+| **S1_log** | 100 % / 100 % / 0.31° | 100 % / 100 % / 0.33° | **45.8 % / 16.7 % / 28.98°** |
+| S2_bonus_0p1 | 0 % / 0 % / 76.74° | 0 % / 0 % / 78.90° | 0 % / 0 % / 99.33° |
+| S3_bonus_tol2 | 8.3 % / 8.3 % / 2.19° | 8.3 % / 8.3 % / 2.20° | 4.2 % / 0 % / 61.44° |
+
+![C4.2 — form vs magnitude in the tolerance-bonus reward](figures/c4_2_reward_study.png)
+
+**Cross-checks:** BASE reproduces the #3 matched run exactly (0.18° / 0.16° / 44.04°) and A1_quad
+reproduces C4.1 (16.7 %), confirming the imported harness is faithful. Every arm/case has 24 rows.
+
+### 5.3 Findings
+
+1. **The gradient route works — and S1 is the best arm in the study on the worst case.** S1 (`log`)
+   matches BASE on both nominal cases (100 % / 100 %) and is better under the dead-wheel fault:
+   **11/24 vs 5/24** at hold = 10 s, **4/24 vs 1/24** at hold = 30 s, with a much smaller final error
+   (**28.98° vs 44.04°**). Among the ICs it does solve it also settles faster (median 123 s vs 280 s).
+2. **Form alone is not sufficient.** S3 keeps the exact indicator step — same functional form, same
+   threshold — but at negligible magnitude, and it behaves like A1 (`quad`): 2/24 vs 4/24 healthy.
+   So the mechanism is *not* "the indicator encodes the success criterion"; it is "the near-target
+   term must be **large** relative to the rest of the reward".
+3. **A large step is a fragile way to deliver that.** Cutting the step 10× (S2) does not degrade
+   gracefully — it destroys learning outright (0/24 in every case, final error 77–99°).
+4. **A precision/robustness trade-off:** S1 gives up a little nominal precision (0.31° vs 0.18°,
+   both far inside the 1° criterion) and buys a large robustness gain. For a fault-tolerance thesis
+   that is the right side of the trade — and `log` is the smoother, threshold-free function, which
+   is also better conditioned for the MCU path in Phase D.
+
+### 5.4 The S2 anomaly — reported, not explained
+
+S2 is **non-monotonic**: a *moderate* step (0.1) fails where a large step (1.0) works and a
+negligible step (3e−4) at least learns to acquire (~2.2°). Its training log shows healthy machinery
+— `explained_variance` reaches 0.968, `approx_kl` stays ≈0.0045, `std` declines normally
+(0.995 → 0.668), no divergence — yet the mean episode return improves only **+1.4 %**
+(−12720.6 → −12546.2) over 2 M steps, from an initial policy **identical** to A1's and S3's.
+S3 shows a *different* pathology: exploration collapse (`std` → 0.245, entropy → −0.05, value loss
+→ 5e−04), i.e. premature convergence to a deterministic ~2.2° policy.
+
+**This is one seed.** A reproducible collapse would be a result; a seed artefact would not. S2 must
+be reported as an anomaly, not as evidence, until replicated. **Recommended replication:** S1_log and
+S2 at 2 further seeds each (~85 min) — S1 to confirm the dead-wheel gain is not seed luck, S2 to test
+whether the collapse reproduces.
+
+### 5.5 What C4.2 does and does not authorize
+
+- It does **not** change Baseline C. BASE stays the frozen baseline until the **C9 freeze gate**; any
+  switch to the `log` reward is a *proposal* to be decided there, supported by a replication.
+- It does not touch the plant, the observation space, `health_range`, the allocator or the estimator.
+
+### 5.6 Honest limits
+
+- n = 24 ICs, **single seed per arm**. The dead-wheel difference (BASE vs S1) is *suggestive, not
+  significant*: McNemar exact **p = 0.146** at hold = 10 s (9 ICs gained, 3 lost) and **p = 0.375**
+  at hold = 30 s (4 gained, 1 lost). The nominal-case difference is 0 discordant pairs.
+- Settle-time medians are over successes only, hence conditionally biased; arms with more successes
+  contribute more ICs to their own median.
+- Success is defined by the C1-corrected settling criterion, and every dead-wheel figure is
+  **hold-specific** (see §4).

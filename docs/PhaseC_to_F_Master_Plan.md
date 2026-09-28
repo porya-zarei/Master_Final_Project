@@ -1,8 +1,8 @@
 # Phase C → F Master Plan — Authoritative Execution Roadmap
 
 ```text
-STATUS:                 C1 ✅ / C4.1 ✅ / scoring-fix #3 ✅ EXECUTED  — C4.2 IN PROGRESS
-EXECUTION AUTHORIZATION: C4.2 ONLY  (USER DECISION 2, 2026-09-11; condition met by C4.1)
+STATUS:                 C1 ✅ / C4.1 ✅ / #3 ✅ / **C4.2 ✅ EXECUTED 2026-09-28**
+EXECUTION AUTHORIZATION: (none outstanding) — the next action needs an explicit milestone-scoped go
 VERSION:                2.1  (supersedes v1 draft)
 ```
 
@@ -18,8 +18,8 @@ VERSION:                2.1  (supersedes v1 draft)
 > Finalizing this roadmap is **not** authorization to implement it.
 >
 > **Approval of Phase C does NOT mean approval of all of Phase C.**
-> **C1, C4.1 and the scoring fix (#3) are executed and pushed** (`1c1687b`, `2d9386b`).
-> The **only** currently authorized outstanding action is **C4.2** (§2.4.1).
+> **C1, C4.1, the scoring fix (#3) and C4.2 are all executed and pushed.** See §2.4.1 for the C4.2
+> outcome. **Nothing further is authorized**: the C4.2 replication and steps 3–12 each need a go.
 > Every other milestone in this document is *described* but **NOT authorized** (§0.4).
 > A task is not "done" because it appears in this plan.
 
@@ -84,7 +84,7 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 | C3a — O1-H privileged-health diagnostic | `[PLANNED]` |
 | C3b — O1-E estimated-health deployment experiment | `[PLANNED]` |
 | Complete observation sweep (O2/O3) | `[PLANNED]` |
-| C4.2 — controlled single-term/**scale** reward study | 🟨 **`[AUTHORIZED — RUNNING]`** 2026-09-11 — condition met (reward shaping is the material contributor); scope is *not* a reward redesign; protocol §2.4.1 |
+| C4.2 — controlled single-term/**scale** reward study | ✅ **`[DONE]`** 2026-09-28 — S1(`log`) matches BASE nominally and **beats it on the dead wheel** (45.8/16.7 % vs 20.8/4.2 %); S3≈A1 ⇒ form alone insufficient; S2 anomalous; report-3 §5 |
 | C6 — safety governor + LQR/B-dot fallback | `[PLANNED]` |
 | C2-e — full MEKF **or** documented estimator alternative | `[PLANNED]` |
 | C5 — fault-onset / plant uncertainty / final validation | `[PLANNED]` |
@@ -337,7 +337,7 @@ contributor to the Phase-B gain is identified (reward shaping; A1 = −83.3 pp).
 **upstream of the observation space** — freezing the reward now means the C2-h/C3 policies are
 trained once instead of twice. **Steps 3–12 remain not authorized** until separately approved.
 
-#### 2.4.1 STEP 2B — C4.2: form vs magnitude in the tolerance-bonus reward 🟨 `[AUTHORIZED · RUNNING]`
+#### 2.4.1 STEP 2B — C4.2: form vs magnitude in the tolerance-bonus reward ✅ `[DONE 2026-09-28]`
 
 **Scope:** a *single-term / single-scale* study. Explicitly **not** a reward redesign.
 
@@ -389,6 +389,33 @@ so BASE and A1 are re-measured into the same table instead of copied from C4.1.
 **Touches:** `scripts/c4_2_reward_study.py`, `scripts/c4_2_reward_check.py`, `scripts/train_rl.py`
 (two numeric reward overrides added), `results/c4_2/` (gitignored), `reports/figures/`, report section.
 **Does not touch:** the plant, the observation space, `health_range`, the allocator, the estimator, MEKF.
+
+**Outcome (2026-09-28).** Executed as specified: n=24, both holds, single seed. Evidence in
+`results/c4_2/`; written up in `reports/report-state-3.md` §5; figure
+`reports/figures/c4_2_reward_study.png`.
+
+| arm | healthy h10/h30 | RW1@50 % h10/h30 | **RW1 dead h10/h30** | final error (dead) |
+|---|---|---|---|---|
+| BASE | 100 / 100 | 100 / 100 | 20.8 / 4.2 | 44.04° |
+| A1_quad | 16.7 / 16.7 | 20.8 / 20.8 | 4.2 / 0 | 54.77° |
+| **S1_log** | 100 / 100 | 100 / 100 | **45.8 / 16.7** | **28.98°** |
+| S2_bonus_0p1 | 0 / 0 | 0 / 0 | 0 / 0 | 99.33° |
+| S3_bonus_tol2 | 8.3 / 8.3 | 8.3 / 8.3 | 4.2 / 0 | 61.44° |
+
+Read against the pre-registered table: **S1 succeeds** — the gradient route works and is the best
+arm on the worst fault; **S3 fails** — the exact step form at negligible magnitude is not
+sufficient. ⇒ the carrier is a **large, correctly-shaped near-target signal**, deliverable by a big
+step (BASE) *or* a steep smooth slope (S1), with the step fragile to magnitude reduction. **S2 is
+an anomaly** (non-monotonic, 0/24 everywhere) whose optimisation trace looks *healthy* (EV 0.968,
+normal KL, normal `std` decay) yet which improved only +1.4 % in return — single seed, so **not
+evidence** until replicated.
+
+**Consequences — none taken automatically:**
+- **Baseline C is unchanged.** A switch to the `log` reward is a *proposal* to be decided at the
+  **C9 freeze gate**, not a consequence of this study.
+- Replication recommended first: **S1_log and S2 at 2 further seeds each** (≈85 min), because the
+  dead-wheel gain is *suggestive, not significant* (McNemar exact p = 0.146).
+- Nothing else in C4.2's scope remains.
 
 ### 2.5 STEP 3 — C2-h: health-estimator investigation `[PLANNED]`
 
@@ -834,7 +861,7 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 
 | Gate | After | Decision |
 |---|---|---|
-| **Gate A** | C1 ✅ + C4.1 ✅ + #3 ✅ **PASSED 2026-09-11** | Contributor = reward shaping (−83.3 pp) ⇒ **C4.2 authorized and running** (§2.4.1). Steps 3–12 still require explicit, milestone-scoped approval |
+| **Gate A** | C1 ✅ + C4.1 ✅ + #3 ✅ + **C4.2 ✅ 2026-09-28** | Carrier = a *large near-target signal* (step **or** slope). Next: replicate S1/S2, or move to step 3 (C2-h) — **each needs explicit approval** |
 | **Gate B** | C3b (O1-E) | Are later observation sets (O2/O3) worth running, or is `h_hat` sufficient? |
 | **Gate C** | C7-lite | Is C7-full worth pursuing, or is C7-lite the final recoverability result? |
 | **Gate D** | end of C-I | **Freeze** — Baseline C-Final selected; C-II/SIL may begin |
@@ -910,9 +937,11 @@ verification and analysis dominate. **Q5 (defence date) is required before any c
 
 **Executed — C1 ✅ + C4.1 ✅ + scoring fix #3 ✅** (committed `1c1687b`, `2d9386b`).
 
-**Authorized now — C4.2 only** (§2.4.1): the controlled single-term/single-scale reward study
-(S1_log / S2_bonus_0p1 / S3_bonus_tol2 vs BASE / A1), 5 Hz · 900 s · 2M steps · seed 0,
-evaluated by the C4.1 harness at n=24 on the same ICs.
+**Executed — C4.2 ✅** (§2.4.1, 2026-09-28): S1(`log`) matches BASE nominally and beats it on the
+dead wheel; S3≈A1; S2 anomalous. Results in `reports/report-state-3.md` §5.
+
+**Authorized now — nothing.** The C4.2 replication (S1/S2 at 2 further seeds, ~85 min) and every
+step 3–12 each require their own explicit, milestone-scoped go.
 
 **Not authorized:** full MEKF implementation · complete health-estimator integration · complete
 observation sweep · reward-v2 redesign · full recoverability oracle · large final Monte Carlo ·
@@ -922,4 +951,4 @@ Then: **Decision Gate A**.
 
 ---
 
-*Execution authorization at the time of writing: **C4.2 only**. C1, C4.1 and #3 are executed*
+*Authorization state: C1, C4.1, #3 and C4.2 are **executed**; nothing is outstanding*
