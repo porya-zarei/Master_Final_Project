@@ -1,7 +1,7 @@
 # Phase C → F Master Plan — Authoritative Execution Roadmap
 
 ```text
-STATUS:                 C1 ✅ / C4.1 ✅ / #3 ✅ / **C4.2 ✅ EXECUTED 2026-09-28**
+STATUS:                 C1 ✅ / C4.1 ✅ / #3 ✅ / C4.2 ✅  — **C2-h protocol written (§2.5.1–.6), awaiting go; D-C2h-1 open**
 EXECUTION AUTHORIZATION: NONE outstanding — the next action needs an explicit milestone-scoped go
 VERSION:                2.1  (supersedes v1 draft)
 ```
@@ -80,7 +80,7 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 | **C1 — truth/regeneration on the corrected time base** | ✅ **`[DONE]`** — `results/c1_regeneration/`, report §1 |
 | **C4.1 — attribution of the Phase-B improvement** | ✅ **`[DONE]`** — 6 arms × 3 cases × 24 ICs, report §3 |
 | **Scoring-criterion fix + n=8 → n=24 re-measure** (was G7, plus the hold defect) | ✅ **`[DONE]`** 2026-09-11 — `results/rl_eval_matched/`, report-2 §6 |
-| C2-h — health-estimator investigation + integration | `[PLANNED]` |
+| C2-h — health-estimator investigation + integration | 🟨 **`[PROTOCOL WRITTEN · AWAITING GO]`** 2026-09-28 — §2.5.1–§2.5.6; **decision D-C2h-1 open** |
 | C3a — O1-H privileged-health diagnostic | `[PLANNED]` |
 | C3b — O1-E estimated-health deployment experiment | `[PLANNED]` |
 | Complete observation sweep (O2/O3) | `[PLANNED]` |
@@ -417,7 +417,7 @@ evidence** until replicated.
   dead-wheel gain is *suggestive, not significant* (McNemar exact p = 0.146).
 - Nothing else in C4.2's scope remains.
 
-### 2.5 STEP 3 — C2-h: health-estimator investigation `[PLANNED]`
+### 2.5 STEP 3 — C2-h: health-estimator investigation 🟨 `[PROTOCOL WRITTEN — AWAITING GO]`
 
 **Primary estimator — per-wheel recursive least squares on wheel acceleration vs commanded motor torque:**
 
@@ -443,8 +443,122 @@ make it poorly conditioned for direct health estimation:
 - wheel-momentum coupling
 - measurement noise
 
-> **Never feed `h_true` to the deployed controller — not in training-evaluation, not in SIL, not in
+> **Never feed `h_true` to the deployed controller — not in training-evaluation, not in SIL, not
 > HIL.** Privileged truth is permitted **only** inside the explicitly labelled `O1-H` diagnostic.
+
+---
+
+#### 2.5.1 Code audit that frames the protocol (verified 2026-09-28)
+
+| Fact | Where | Consequence for C2-h |
+|---|---|---|
+| The wheel model is **exactly** `J_w * Omega_dot_w = -h * tau_cmd` — **no friction, no viscous drag** | `dynamics.py:158,163` | h enters **linearly** and each wheel is independent ⇒ per-wheel RLS is exactly well posed; no friction term must be identified alongside h |
+| **`allocate_torque` consumes `dyn.rw_health` (ground truth) to invert the fault**, routing the residual to the MTQs | `controllers.py:35-39` | ⚠️ **the allocator is currently a privileged oracle** — see **D-C2h-1**. It is a *larger* consumer of health than the observation is |
+| Wheel speed is read **straight from the plant state** (`dyn.omega_w / rw_max_speed`); `sensors.py` has **no wheel tachometer** | `adcs_env.py:118` | the estimator's sensing model must be declared explicitly, and noise/quantisation must enter as a stated sensitivity case — not silently |
+| Wheel speeds are **hard-clamped** at ± 628.3 rad/s *after* integration | `dynamics.py:197` | ⚠️ **false dead-wheel trap**: at the speed limit ΔΩ = 0 while tau_cmd ≠ 0, so a naive RLS reports h ≈ 0. A saturation guard is **mandatory** |
+| Health is sampled **once, at `reset()`** — faults are static within an episode | `adcs_env.py:152` | the current plant cannot test *tracking*; C2-h must test it offline on synthetic step changes (mid-episode onset is C5) |
+| Control is a zero-order hold at 5 Hz; the plant is sub-stepped `n_sub` times per period | `adcs_env.py:58-63,170-171` | over one control period ΔΩ = −h·tau_cmd·T_c/J_w **exactly**, so the discrete regressor is exact and no derivative filter is needed in the noiseless case |
+
+**Numbers that decide the design** (`actuators.yaml`: `J_w = 2.0e-4`, `tau_max = 0.010 N·m`, `Omega_max = 628.3`):
+
+- full torque: `Omega_dot = tau/J_w = 50 rad/s²` ⇒ ΔΩ = **10 rad/s** per 0.2 s step (1.6 % of the speed
+  range) — a very strong signal;
+- `h = 0.5` at full torque: ΔΩ = 5 rad/s;
+- near nadir at a typical disturbance-rejection command (tau ≈ 1e-3 N·m) with h = 0.5: 2.5 rad/s²;
+- in a quiet hold (tau ≲ 1e-4 N·m): ≲ 0.25 rad/s².
+
+⇒ **identifiability is excitation-driven and excitation decays after acquisition.** h is well
+observed during the slew/detumble and poorly observed during a settled nadir hold. That is a
+*finding*, not a defect — and it is exactly why the estimator must publish a confidence/age output.
+
+#### 2.5.2 Estimator design
+
+Per wheel i, scalar RLS with forgetting factor λ:
+
+```text
+phi_k = -tau_cmd[i]                                  (known: the allocator issued it, adcs_env.py:164)
+y_k   =  J_w * (Omega_w[i,k] - Omega_w[i,k-1]) / T_c  (T_c = control period)
+h_k   =  h_{k-1} + P_k * phi_k * (y_k - h_{k-1} * phi_k)
+P_k   =  (P_{k-1}/lambda) / (1 + (P_{k-1}/lambda) * phi_k^2)
+```
+
+**Update guards — skip the update (do not adapt) when any holds:**
+
+1. **excitation gate** — no information when the wheel is barely commanded; tau_min set from an SNR target;
+2. **saturation guard** — wheel at/near the speed limit makes ΔΩ = 0 and would fake a dead wheel;
+3. **physical-plausibility gate** — reject a |ΔΩ| larger than any physically attainable value;
+4. **estimate clamp** — `h_hat` is confined to [0,1] (health is bounded by construction).
+
+**Outputs:** `h_hat ∈ [0,1]^3`, the covariance `P`, and **`age_i` = time since wheel i's last accepted
+update** — consumers must be able to fall back when information is stale, and **never to truth**.
+
+**Initialisation:** `h_hat = 1` (assume healthy until evidence), with the asymmetry stated:
+over-estimating h under-delivers torque, under-estimating it saturates the wheel.
+
+#### 2.5.3 Deliberately *not* done here
+
+- **No policy training** — C2-h produces an estimator and nothing else.
+- **No plant change**, no change to the fault model, `health_range`, or the allocator's default path.
+- **Not MEKF** — attitude / gyro-bias estimation is C2-e and is a *different* estimator.
+- The body-rate equation stays a physics-based **residual cross-check only** (see the note above),
+  never a second authoritative health estimator.
+
+#### 2.5.4 Validation protocol (offline, no RL)
+
+| Case | Purpose |
+|---|---|
+| healthy (1,1,1) | false-positive check |
+| rw1 @ 0.5 | the subtle case (half authority) |
+| rw1 dead (0) | easy *if* torque is commanded — and the one that must not be faked by saturation |
+| rw1 mid-episode step 1 → 0.4 at t = 300 s | tracking / forgetting-factor tuning (**synthetic**; the plant holds faults static) |
+| spin-up driving a wheel into the **speed limit** | the saturation trap: pass only if no false dead-wheel is reported |
+| tachometer **noise + quantisation** | declares how much of the result rides on the idealised readout |
+
+**Metrics:** detection delay (time to reach abs(h_hat − h) ≤ 0.05 after onset), steady-state error,
+false-detection rate during saturation, fraction of time with `age > 1 s` (staleness), and the same
+under tachometer noise.
+
+**Proposed acceptance criteria (to be agreed):** for h ∈ {0, 0.5}, estimated within **10 s** of
+commanded excitation at abs(h_hat − h) ≤ 0.05; **zero** false dead-wheel reports during speed-limit
+saturation; staleness reported honestly rather than hidden.
+
+#### 2.5.5 ⚠️ Open decision **D-C2h-1** — the allocator uses ground-truth health today
+
+`allocate_torque` (`controllers.py:35–39`) reads `dyn.rw_health` and commands `tau_des / h_true`, so it
+**masks the fault perfectly** whenever `tau_des / h ≤ tau_max`. Consequences:
+
+1. **Every existing result** (Phase 2, C1, C4.1, C4.2) was produced with an **oracle allocator**. The
+   RL-vs-LQR advantage under fault therefore cannot be attributed to fault handling by the policy —
+   both controllers share the same oracle. (Consistent with C4.1: the measured gain is reward
+   shaping, i.e. acquisition quality.)
+2. The thesis's "fault-tolerant" claim currently carries an asterisk: part of the tolerance is
+   oracle knowledge.
+3. For a dead wheel the allocator sets `tau_cmd = 0` and routes the residual to the **MTQs**, which
+   can only produce torque perpendicular to **B** — which is *why* the dead-wheel case is intrinsically
+   hard (20.8 % / 4.2 %), largely independent of the policy.
+
+**Options:**
+
+- **(a) Keep the oracle allocator as canonical for Baseline C and add an `h_hat` path as a separate
+  experiment** — preserves comparability with the whole existing evidence base and converts the oracle
+  into an explicit, quantified *ablation*. **← recommended**
+- **(b) Switch the canonical allocator to `h_hat` now** — the honest deployment configuration, but it
+  **invalidates every existing number** and forces Phase 2 / C1 / C4.1 / C4.2 to be re-run.
+- **(c) Leave it and say nothing** — not acceptable: it is a material assumption behind the central
+  claim.
+
+Option (a) additionally yields a **deployment-realism triad** that is a strong result in its own
+right: `allocator(h_true)` → `allocator(h_hat)` → `allocator(h ≡ 1)`, isolating exactly how much fault
+tolerance comes from *knowing* the fault.
+
+#### 2.5.6 Deliverables
+
+- `codes/satellite_adcs/health_estimation.py` — the estimator (no plant change);
+- `codes/scripts/c2h_health_estimator.py` — offline validation driver (table + figure);
+- `reports/figures/c2h_*.png` and a new report section;
+- an **integration contract** for C3b: `h_hat`, `P`, `age` exposed to the observation builder **and**
+  (subject to D-C2h-1) to the allocator — `h_true` never exposed;
+- the D-C2h-1 decision recorded in this document.
 
 ### 2.6 STEP 4 & 5 — C3a / C3b: the observation split `[PLANNED]`
 
@@ -847,6 +961,7 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 | **Q7 — canonical training rate / horizon** | ✅ **RESOLVED 2026-09-11 — frozen at 5 Hz / 900 s; no re-baseline** (§0.5 item 11) |
 | **Q8 — C4.2 reward study** | ✅ **AUTHORIZED 2026-09-11 — condition met. Small controlled single-term/scale study; NOT a reward redesign.** |
 | **Q6 — hardware bench** | **Assume MCU/simulation HIL initially; physical actuator bench optional** |
+| **D-C2h-1 — allocator health source** | ⚠️ **OPEN 2026-09-28** — `allocate_torque` currently inverts the fault using **ground-truth** health (`controllers.py:35–39`), so every existing result has an oracle allocator. Recommended **(a)**: keep the oracle as canonical for Baseline C and add an `h_hat` path as a separate quantified ablation (preserves the entire existing evidence base). Details §2.5.5 |
 
 > ### ✅ Q5 resolved 2026-09-11 — nothing in this plan is schedule-blocked
 >
