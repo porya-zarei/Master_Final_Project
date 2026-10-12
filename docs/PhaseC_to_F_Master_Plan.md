@@ -2,7 +2,7 @@
 
 ```text
 STATUS:                 C1 ✅ / C4.1 ✅ / #3 ✅ / **C4.2 ✅ EXECUTED 2026-09-28**
-EXECUTION AUTHORIZATION: (none outstanding) — the next action needs an explicit milestone-scoped go
+EXECUTION AUTHORIZATION: NONE outstanding — the next action needs an explicit milestone-scoped go
 VERSION:                2.1  (supersedes v1 draft)
 ```
 
