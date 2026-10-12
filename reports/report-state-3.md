@@ -584,3 +584,121 @@ whether the collapse reproduces.
   contribute more ICs to their own median.
 - Success is defined by the C1-corrected settling criterion, and every dead-wheel figure is
   **hold-specific** (see §4).
+
+---
+
+## 6. C2-h — wheel-health estimator (offline validation)
+
+Protocol: `docs/PhaseC_to_F_Master_Plan.md` §2.5.1–§2.5.6. Evidence:
+`codes/scripts/c2h_health_estimator.py` → `results/c2h/` (JSON, table, figure).
+**No RL training and no plant change** were involved; this validates an estimator
+against ground truth. Completed 2026-09-28.
+
+### 6.1 What was built
+
+`codes/satellite_adcs/health_estimation.py` — a **per-wheel recursive least squares**
+estimator with a forgetting factor, exploiting the exact plant structure
+(`dynamics.py:158,163`): `J_w·Ω̇_w = −h·τ_cmd`, with **no friction and no drag**, so `h`
+enters linearly and the wheels are independent. The regressor is `φ = −τ_cmd` and the
+output `y = J_w·ΔΩ/T_c`, both **normalised by `τ_ref = τ_max`**:
+
+> **Design bug found and fixed during validation.** Normalisation is not cosmetic. An
+> unnormalised `φ ~ 1e−2` with `P0 = 1` makes convergence take `≈ 1/φ² = 4×10⁴` steps;
+> the first version advanced only 0.001 of the way to the true health in 100 steps.
+
+Three guards, each motivated by a failure mode rather than added speculatively:
+
+| guard | failure mode it prevents |
+|---|---|
+| **excitation gate** | `τ_cmd = 0` carries no information about `h`; updating anyway lets noise random-walk the estimate |
+| **saturation guard** | wheel speed is hard-clamped (`dynamics.py:197`), so at the limit `ΔΩ = 0` while `τ_cmd ≠ 0` — an ungated RLS reports a **dead wheel on a healthy one** |
+| **plausibility gate** | \|y\| ≤ τ_max by construction; anything larger is a glitch or unmodelled clamp |
+
+The estimator publishes **`age`** = time since the last accepted update, so a consumer can
+distinguish "healthy" from "**unknown**" instead of silently trusting a stale number.
+
+> **Second bug found and fixed:** the gate originally compared the *normalised* regressor
+> against a *physical* threshold, making it 100× more permissive than intended
+> (`|τ| < 1e-7` instead of `< 1e-5`). It now compares in physical units.
+
+### 6.2 Level A — synthetic guard tests (deterministic)
+
+| test | result |
+|---|---|
+| **A1** exact identification, `h = 0.5`, no noise | `ĥ → 0.519` in 100 steps; abs err after 1/10/100 steps = **0.4 / 0.143 / 0.019** (algebraic ≈1/n at λ=1, as textbook RLS requires) |
+| **A2** saturation trap, **guarded** | `ĥ = 1.000` after 100 steps pinned at the speed limit (100 updates correctly skipped) |
+| **A2** saturation trap, **unguarded** | `ĥ = 0.0099` → **FALSE DEAD WHEEL on a healthy wheel** |
+| **A3** excitation gate, `τ_cmd = 0` | 0 updates, `age = 10 s`, estimate untouched at 1.0 — no random walk |
+| **A4** tracking `1.0 → 0.4` at t=60 s | λ=1.0: never (0.602); λ=0.995: 91 s; **λ=0.98: 25.2 s**; λ=0.90: 5.4 s |
+
+A2 is the reason the saturation guard is not optional, and A4 quantifies the
+bias/variance/freshness trade-off that sets the default `λ = 0.98`.
+
+### 6.3 Level B — closed loop, real plant, Baseline-C policy (wheel 0; medians over 3 seeds)
+
+| case | `h_true` | detection delay | abs err at end | staleness frac | updates | max \|τ_cmd\| |
+|---|---|---|---|---|---|---|
+| healthy | 1.0 | 0.2 s ¹ | **0.0** | 0.002 | 3730 | 0.010 |
+| RW1 @ 50 % | 0.5 | **1.8 s** | **0.0** | 0.000 | 4167 | 0.010 |
+| **RW1 dead (today's allocator)** | 0.0 | **never** | 1.0 | **0.9989** | **0** | **0.000** |
+| RW1 step `1.0 → 0.4` @ 300 s | 0.4 | **11.2 s** | **0.0** | 0.002 | 4099 | 0.010 |
+| **RW1 dead — counterfactual regressor** | 0.0 | **3.2 s** | → **0.0** | — | — | — |
+
+¹ flagged `already_correct_at_onset` — `ĥ` starts at 1.0 and `h_true` is 1.0, so there is
+nothing to converge to. (An earlier version of the metric measured the delay from `t = 0`
+and therefore reported a meaningless 0.2 s here and for the step case too — fixed.)
+
+The counterfactual is **exact, not approximate**: the applied torque on a dead wheel is
+`h·τ = 0` whether or not the allocator zeroes the command, so the wheel-speed trajectory is
+identical in both cases. Only the regressor differs — which isolates the cause.
+
+### 6.4 Findings
+
+1. **A degraded wheel is identifiable, quickly and exactly.** For `h = 0.5`, the estimate
+   reaches the true value within **1.8 s** with **zero** error at the end of the episode.
+   For a mid-episode step to 0.4 it recovers in **11.2 s** and again ends exact.
+2. **⚠️ The dead wheel is not merely hard — it is *unobservable*, and the allocator is why.**
+   `allocate_torque` (`controllers.py:35–39`) inverts the fault using **ground-truth** health,
+   so on a dead wheel it issues `τ_cmd ≡ 0`: max `|τ_cmd| = 0.000` across all 4500 steps,
+   **zero** estimator updates, staleness **99.9 %**. Fed the command a *non-oracle* allocator
+   would issue (`τ_des`, max 0.010), the *same wheel-speed trajectory* identifies `h = 0` in
+   **3.2 s**. The fault is therefore perfectly identifiable in principle and hidden in practice.
+   ⇒ This is why estimator and allocator **cannot be deployed in that order**: with an oracle
+   allocator there is nothing to estimate; with an estimator-driven allocator the boot order
+   must be *detect first, then compensate*. Registered as **G13** and resolved as
+   **D-C2h-1(a)** (keep the oracle as canonical; add the `h_hat` path as a quantified ablation).
+3. **Tachometer noise biases a fixed-threshold gate; a noise-matched gate removes the bias.**
+   The torque-equivalent noise is `J_w·√2·σ_Ω/T_c`; with a fixed `τ_min = 1e−5` the sub-SNR
+   updates inject bias — up to **0.55** error at σ = 0.5 rad/s. Scaling the gate with the noise
+   floor (`k = 3`) reduces the end error by 2–3 orders of magnitude (**0.5495 → 0.0022** for
+   healthy; **0.2880 → 0.0008** at `h = 0.5`), and the honest price is **staleness**
+   (0.89–0.91): the estimator declares "unknown" more often instead of being confidently wrong.
+
+### 6.5 The §2.5.4 acceptance criteria, judged
+
+| criterion | outcome |
+|---|---|
+| `h = 0.5` within 10 s of commanded excitation, `abs err ≤ 0.05` | ✅ **1.8 s, error 0.0** |
+| `h = 0` within 10 s | ⚠️ **not met under the current allocator — by construction**, because the wheel is commanded exactly zero (finding 2). Met in **3.2 s** once it *is* commanded. Recorded as a finding, not papered over. |
+| zero false dead-wheel reports during speed-limit saturation | ✅ guarded estimator holds `ĥ = 1.000`; the unguarded one fails (A2) |
+| staleness reported rather than hidden | ✅ `age` published; 99.9 % stale on the unobservable case |
+
+### 6.6 Honest limits
+
+- **There is no wheel-speed sensor in the plant.** `sensors.py` measures gyro, magnetometer,
+  sun sensor, star tracker and GPS; `ADCSEnv._obs()` reads `dyn.omega_w` **straight from the
+  state**. The estimator's perfect tachometer is therefore *idealised*, which is exactly why
+  the noise/quantisation sweep exists — and it shows the result is sensitive to it. Closing
+  this gap (a real tachometer model) is a plant change and was deliberately **not** made.
+- The **step case is synthetic**: the plant samples health once per episode (`adcs_env.py:152`),
+  so a mid-episode onset had to be injected. Detection latency under real onset is C5's job.
+- Three seeds × one IC each; the closed-loop numbers are medians over those, not distributions.
+- The estimator is validated **offline**. It is not yet wired into any policy observation or
+  the allocator — that is C3b and the D-C2h-1(a) ablation, neither of which has been run.
+
+### 6.7 What this licenses next
+
+The estimator is good enough to feed C3b **for `h > 0`**, with `age` as the honesty channel.
+It also reframes the dead-wheel result: with `h_true = 0` the current architecture gives the
+estimator nothing to see, so any claim that "a health-aware policy would fix the dead wheel"
+must come with the allocation path changed first — otherwise the policy would be told nothing.

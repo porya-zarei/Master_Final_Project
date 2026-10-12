@@ -1,7 +1,7 @@
 # Phase C → F Master Plan — Authoritative Execution Roadmap
 
 ```text
-STATUS:                 C1 ✅ / C4.1 ✅ / #3 ✅ / C4.2 ✅  — **C2-h protocol written (§2.5.1–.6), awaiting go; D-C2h-1 open**
+STATUS:                 C1 ✅ / C4.1 ✅ / #3 ✅ / C4.2 ✅ / **C2-h ✅ EXECUTED 2026-09-28**
 EXECUTION AUTHORIZATION: NONE outstanding — the next action needs an explicit milestone-scoped go
 VERSION:                2.1  (supersedes v1 draft)
 ```
@@ -80,7 +80,7 @@ Legend: `[DONE]` completed with evidence · `[AUTHORIZED]` may be executed **now
 | **C1 — truth/regeneration on the corrected time base** | ✅ **`[DONE]`** — `results/c1_regeneration/`, report §1 |
 | **C4.1 — attribution of the Phase-B improvement** | ✅ **`[DONE]`** — 6 arms × 3 cases × 24 ICs, report §3 |
 | **Scoring-criterion fix + n=8 → n=24 re-measure** (was G7, plus the hold defect) | ✅ **`[DONE]`** 2026-09-11 — `results/rl_eval_matched/`, report-2 §6 |
-| C2-h — health-estimator investigation + integration | 🟨 **`[PROTOCOL WRITTEN · AWAITING GO]`** 2026-09-28 — §2.5.1–§2.5.6; **decision D-C2h-1 open** |
+| C2-h — health-estimator investigation + integration | ✅ **`[DONE]`** 2026-09-28 — per-wheel RLS + guards, offline-validated (report-3 §6): `h>0` identified in **1.8 s** with **zero** end error; **a dead wheel is unobservable** (τ_cmd ≡ 0, 0 updates) yet identifies in **3.2 s** when commanded ⇒ **G13**. D-C2h-1 resolved **(a)**. **Not** integrated into any policy/allocator yet |
 | C3a — O1-H privileged-health diagnostic | `[PLANNED]` |
 | C3b — O1-E estimated-health deployment experiment | `[PLANNED]` |
 | Complete observation sweep (O2/O3) | `[PLANNED]` |
@@ -184,7 +184,7 @@ Verified by reading the code on 2026-09-11, not from memory.
 > Milestones above are marked `[DONE]` **because they were run and produced evidence.**
 > Nothing else in this document may be marked done on the strength of being described here.
 
-### 1.2 Corrected audit — what is NOT done (G1–G12)
+### 1.2 Corrected audit — what is NOT done (G1–G13)
 
 | # | Gap | Verified evidence | Consequence |
 |---|---|---|---|
@@ -200,6 +200,7 @@ Verified by reading the code on 2026-09-11, not from memory.
 | **G10** | **No plant uncertainty.** Only fault health is randomized. | `satellite.yaml`, `actuators.yaml` | A controller robust to faults but not to a ±10% inertia error is not deployable |
 | **G11** | **No definition of physical recoverability.** "Success" for a dead wheel is demanded over *all* ICs. | `eval_rl_vs_lqr.py:61` — `success = not isinf(settling_time)` over the whole sample | With one dead wheel the system is underactuated; some ICs are **physically unreachable in 900 s**. Counting those as controller failures understates the contribution and is scientifically wrong. |
 | **G12** | **Wheel speed is clipped as a state, not modelled.** | `dynamics.py:197` — `omega_w = clip(±max_speed)` | Silently destroys wheel momentum at saturation (violates `H` conservation). Acceptable placeholder; must be documented, ideally replaced by motor torque roll-off. |
+| **G13** | ⚠️ **Control allocation is privileged: `allocate_torque` inverts the fault using GROUND-TRUTH health.** `tau_cmd = tau_des / dyn.rw_health`, so the fault is *masked* whenever `tau_des/h <= tau_max`; the residual is routed to the MTQs. | `controllers.py:35–39`. **Measured (C2-h, 2026-09-28):** on a dead wheel the allocator issues `tau_cmd ≡ 0` — max |τ_cmd| = **0.0** over 4500 steps — so a telemetry-based estimator gets **0 updates** in the whole episode (staleness 99.9%); the *same* wheel-speed trajectory with a non-oracle regressor identifies `h = 0` in **3.2 s** | **Material assumption behind the central claim:** every existing result (Phase 2, C1, C4.1, C4.2) was produced with an oracle allocator, and LQR shares it, so the RL-vs-LQR fault margin is *not* attributable to fault handling by the policy. Worse, the oracle makes a dead wheel **unobservable** to any health estimator, so estimator and allocator cannot be deployed in that order. Resolution = **D-C2h-1(a)** (§2.5.5): keep the oracle as canonical and add an `h_hat` path as a quantified ablation with a detect-then-compensate bootstrap. |
 
 ---
 
@@ -417,7 +418,7 @@ evidence** until replicated.
   dead-wheel gain is *suggestive, not significant* (McNemar exact p = 0.146).
 - Nothing else in C4.2's scope remains.
 
-### 2.5 STEP 3 — C2-h: health-estimator investigation 🟨 `[PROTOCOL WRITTEN — AWAITING GO]`
+### 2.5 STEP 3 — C2-h: health-estimator investigation ✅ `[DONE 2026-09-28]`
 
 **Primary estimator — per-wheel recursive least squares on wheel acceleration vs commanded motor torque:**
 
@@ -559,6 +560,40 @@ tolerance comes from *knowing* the fault.
 - an **integration contract** for C3b: `h_hat`, `P`, `age` exposed to the observation builder **and**
   (subject to D-C2h-1) to the allocator — `h_true` never exposed;
 - the D-C2h-1 decision recorded in this document.
+
+**Outcome (2026-09-28).** Executed as specified: offline validation, no RL training, no plant
+change. Evidence in `results/c2h/`, figure `reports/figures/c2h_validation.png`, written up in
+`reports/report-state-3.md` §6.
+
+| case (wheel 0) | h_true | detection delay | abs err at end | staleness | max abs(tau_cmd) |
+|---|---|---|---|---|---|
+| healthy | 1.0 | 0.2 s (already correct at onset) | 0.0 | 0.002 | 0.010 |
+| RW1 @ 50 % | 0.5 | **1.8 s** | **0.0** | 0.000 | 0.010 |
+| **RW1 dead (oracle allocator)** | 0.0 | **never** | 1.0 | **0.9989** | **0.000** |
+| RW1 step 1.0 → 0.4 at 300 s | 0.4 | **11.2 s** | 0.0 | 0.002 | 0.010 |
+| RW1 dead, non-oracle regressor | 0.0 | **3.2 s** | → 0.0 | — | — |
+
+Guard tests (Level A): the **unguarded** estimator reports a **false dead wheel**
+(`h_hat = 0.0099`) on a healthy wheel pinned at the speed limit; the guarded one holds 1.000.
+Forgetting-factor trade-off on a synthetic step: λ=1.0 never, 0.995 → 91 s, **0.98 → 25.2 s**,
+0.90 → 5.4 s. Tachometer noise with a fixed gate biases the estimate by up to **0.55**; a
+noise-matched gate (`k=3`) cuts that to **0.0022** at a staleness cost of ~0.9.
+
+**Headline consequence:** a dead wheel is not merely hard to identify — it is **unobservable**
+under the current architecture. `allocate_torque` commands it *exactly zero* (`controllers.py:35–39`),
+so the estimator receives no information whatsoever (0 updates in 4500 steps), while the *same*
+wheel-speed trajectory identifies `h = 0` in **3.2 s** once the wheel is commanded. This is **G13**,
+and it means the deployment order must be *detect first, then compensate*: an `h_hat`-driven
+allocator cannot bootstrap from an oracle allocator's telemetry.
+
+**Two design bugs found and fixed during validation** (not test artefacts): the regressor needed
+normalisation by `tau_ref` — unnormalised, with `P0 = 1`, convergence needs ≈ 4e4 steps — and the
+excitation gate was comparing a *normalised* regressor against a *physical* threshold (100× too
+permissive, now fixed to compare in physical units).
+
+**Deliberately not done:** no tachometer model added to the plant (the estimator still sees the
+idealised `dyn.omega_w`), the estimator is **not** wired into any observation or the allocator, and
+the D-C2h-1(a) `h_hat` ablation has **not** been run.
 
 ### 2.6 STEP 4 & 5 — C3a / C3b: the observation split `[PLANNED]`
 
@@ -976,7 +1011,7 @@ Supporting risks: `C:` drive near-full (keep `results/`, venv and caches on `E:`
 
 | Gate | After | Decision |
 |---|---|---|
-| **Gate A** | C1 ✅ + C4.1 ✅ + #3 ✅ + **C4.2 ✅ 2026-09-28** | Carrier = a *large near-target signal* (step **or** slope). Next: replicate S1/S2, or move to step 3 (C2-h) — **each needs explicit approval** |
+| **Gate A** | C1 ✅ + C4.1 ✅ + #3 ✅ + C4.2 ✅ + **C2-h ✅ 2026-09-28** | Next candidates, **each needing explicit approval**: (i) replicate C4.2 (S1/S2 × 2 seeds), (ii) step 4/5 = C3a/C3b observation split — but note C3b now depends on the **G13** allocator question, (iii) the D-C2h-1(a) `h_hat` ablation |
 | **Gate B** | C3b (O1-E) | Are later observation sets (O2/O3) worth running, or is `h_hat` sufficient? |
 | **Gate C** | C7-lite | Is C7-full worth pursuing, or is C7-lite the final recoverability result? |
 | **Gate D** | end of C-I | **Freeze** — Baseline C-Final selected; C-II/SIL may begin |

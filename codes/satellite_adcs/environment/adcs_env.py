@@ -185,6 +185,11 @@ class ADCSEnv(gym.Env):
         truncated = self._step_count >= self.max_steps
         info = {
             "rw_health": self.dyn.rw_health.copy(),
+            # The commanded WHEEL torque actually issued by the allocator this step,
+            # post-clip and pre-health. A real spacecraft knows this (it issued it),
+            # and the C2-h health estimator needs it as its regressor. Purely
+            # additive: it does not touch obs, reward or the dynamics.
+            "tau_cmd": np.asarray(tau_cmd, dtype=float).copy(),
             "pointing_error_deg": self.pointing_error_deg(),
             "theta_rad": float(np.linalg.norm(theta)),
             "reward_components": comp,
