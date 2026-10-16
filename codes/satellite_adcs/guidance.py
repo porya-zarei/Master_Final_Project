@@ -29,6 +29,12 @@ class NadirGuidance:
         C_I_L = np.column_stack([xhat, yhat, zhat]).T  # inertial -> LVLH (rows = body axes)
         q_ref = dcm_to_quat(C_I_L)
 
-        # LVLH rotates about the orbit normal (yhat) at mean motion n
-        omega_ref_body = np.array([0.0, self.n, 0.0])  # in LVLH coords
+        # The LVLH frame rotates in inertial space about the orbit normal h_hat
+        # at rate +n. This frame takes yhat = -h_hat, so in LVLH coordinates
+        # omega = -n * yhat = [0, -n, 0].
+        #
+        # G14 (2026-10-12): this was [0, +n, 0] -- a sign flip that fed a constant
+        # 2n rate error (~2.2e-3 rad/s) into the LQR term, the RL observation and
+        # the reward. Pinned by tests/test_frames.py::test_guidance_rate_sign.
+        omega_ref_body = np.array([0.0, -self.n, 0.0])  # in LVLH coords
         return q_ref, omega_ref_body

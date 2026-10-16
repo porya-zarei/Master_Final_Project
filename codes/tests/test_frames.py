@@ -191,6 +191,34 @@ def test_magnetic_field_is_in_the_body_frame():
         "B_body is not C_BN @ B_I"
 
 
+# ------------------------------------------------------------------- T7/T8
+def test_sun_sensor_frame():
+    """sensors.py: sun_meas = C @ sun_inertial must be the body-frame sun."""
+    cfg = load_config()
+    cfg["sensors"]["sun_sensor"]["noise_std_rad"] = 0.0
+    rng = np.random.default_rng(9)
+    d = SpacecraftDynamics(cfg, rng)
+    d.reset(q=_rand_q(rng), omega=np.zeros(3))
+    from satellite_adcs.sensors import SensorSuite
+    got = SensorSuite(cfg, rng).measure(d)["sun"]
+    e = _C_BN_scipy(d.q) @ d.sun_inertial()
+    assert np.allclose(got, e / np.linalg.norm(e), atol=1e-12), \
+        "sun sensor is not measuring the body-frame sun vector"
+
+
+def test_controller_error_frame_rotation():
+    """controllers.py: C_e = quat_to_dcm(q_err) must map a REFERENCE-frame vector
+    into the BODY frame (it is applied to omega_ref_lvlh)."""
+    from satellite_adcs.quaternion import quat_error
+    rng = np.random.default_rng(10)
+    q_ref, q = _rand_q(rng), _rand_q(rng)
+    q_err = quat_error(q, q_ref)
+    v = rng.normal(size=3)
+    indep = _C_BN_scipy(q) @ _C_NB_scipy(q_ref)      # C_{B<-I} C_{I<-ref}
+    assert np.allclose(quat_to_dcm(q_err) @ v, indep @ v, atol=1e-10), \
+        "the error-frame rotation does not map reference coords to body coords"
+
+
 # --------------------------------------------------------------------- runner
 def main():
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
