@@ -340,6 +340,42 @@ wheel is **authority-limited, not tuning-limited**: a fixed-gain LQR is already 
 limit there. That makes the framing for C7 (recoverability) the honest home for this result — and it
 is exactly the regime where an RL policy *could* still earn its place.
 
+
+### 1.5 🔍 Why retraining failed at first, and what it implies (2026-10-16)
+
+The first post-fix retraining (`results/rl_shaped_v2`, 2M steps, `bonus`, otherwise canonical)
+**failed to learn**: 0 % success, 102° final error — while LQR on the SAME paired conditions
+reaches 75 % / 0.56°. A 400k diagnostic improved to −12838 then **degraded** to −14351 by 2M,
+and a `log`-shape run also failed (−41022 → −41181). So the reward shape is **not** the cause.
+
+**Diagnosis, measured rather than guessed.** A known-good controller was run *inside* `ADCSEnv`
+(action = −K·[θ; ω_err] / (tau_scale·tau_max), which reproduces the classical LQR exactly because the env
+runs the same allocator). The env, reward, observation and action scaling are all **fine** — a good
+controller scores strongly positive. What it revealed is *where the ceiling is*:
+
+| gyro bias | attainable return | steps inside the 1° reward band | final error |
+|---|---|---|---|
+| **as configured (1e-3 rad/s, UNESTIMATED)** | **+1406.7** | **1617 / 4500 = 36 %** | **1.001°** |
+| zeroed | **+3881.6** | **4091 / 4500 = 91 %** | **0.295°** |
+
+⇒ **The unestimated gyro bias (G1) pins the physically achievable pointing error at ~1.0°, and the
+reward's tolerance is exactly 1°.** The bonus band is therefore barely reachable (36 % of steps even
+for an optimal classical controller), so the learning signal is thin and the task is marginal — which
+is why PPO collapsed. It also independently confirms the audit's observation that the LQR's ~0.7° floor
+matches the bias-induced offset.
+
+**Consequences (not yet acted on — they change the roadmap):**
+
+1. **C2-e (MEKF / gyro-bias estimation) is promoted from ‘nice to have’ to a PREREQUISITE** for the RL
+   task to be learnable at a 1° tolerance. G1 is now blocking, not cosmetic.
+2. Alternatively the reward tolerance could be widened — but that moves the goalposts relative to the
+   thesis's own 1° success criterion, so it is the inferior fix and must be argued explicitly.
+3. Any RL-vs-LQR comparison is **unfair to RL** until the estimator is fixed: the classical baseline is
+   measured through the same stub, but a policy must *learn* against a signal the stub has nearly
+   erased, while the LQR was designed on the continuous error and does not need the band.
+4. This is also the honest explanation for why pre-fix training worked at all: the loop was then
+   nulling a *non-physical* error with no such floor.
+
 ## 2. Phase C — the evidence-driven workflow
 
 > **C-I does not require C1–C12 regardless of results.** C1 and C4.1 run first; **their evidence
