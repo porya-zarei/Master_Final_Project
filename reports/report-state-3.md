@@ -702,3 +702,83 @@ The estimator is good enough to feed C3b **for `h > 0`**, with `age` as the hone
 It also reframes the dead-wheel result: with `h_true = 0` the current architecture gives the
 estimator nothing to see, so any claim that "a health-aware policy would fix the dead wheel"
 must come with the allocation path changed first — otherwise the policy would be told nothing.
+
+---
+
+## 7. ⛔ ERRATUM (2026-10-12) — §1–§6 of this report are SUPERSEDED
+
+**Every number in §1–§6 above is invalid.** They were produced with a transposed
+attitude matrix (`G14`, plan §1.3). This section is the record; nothing above is
+deleted, because the old numbers are the before/after evidence.
+
+### 7.1 What was wrong
+
+`quat_to_dcm` returned the **active** matrix `C_NB` (body→inertial) while its
+docstring — and every consumer — assumed `C_BN` (inertial→body). Verified against
+scipy and against a conservation law:
+
+| check | result |
+|---|---|
+| `quat_to_dcm` for q = +90° about z | equals `R_z(+90°)` = **C_NB**, not `C_BN` |
+| torque-free inertial momentum | conserved to **3.4e−12** read as `C_NB`, drifts **185 %** read as `C_BN` |
+| pointing metric vs truth (random attitudes) | differ by up to **77.5°** |
+| **LQR after 600 s convergence** | **reported 1.1888° vs TRUTH 91.3776°** |
+| guidance reference `q_ref` | its true body+z is **141.6°** from nadir while the code's own reading said **0.0000°** |
+| reference-rate sign | code used `[0, +n, 0]`; measured `[0, −n, 0]` |
+
+The loop was converging to a **non-physical attitude** and nulling a quantity that
+was not the pointing error. The numbers in the reports matched the JSON files —
+the JSON simply measured the wrong angle. **Matching files is not validation.**
+
+### 7.2 The fix and its guarantee
+
+`quat_to_dcm` / `dcm_to_quat` transposed (a single primitive fix — every consumer
+was already written for `C_BN`), plus the one-line reference-rate sign. Guarded by
+`codes/tests/test_frames.py`, **12/12 passing**, including a torque-free
+momentum-conservation test that any future frame slip will break.
+
+The test suite was committed **failing** first (7/8 red) so the history shows the
+defect was real. Three of my own test bugs were found and fixed in the process —
+two tests were *self-referential* (they built their "expected" value from the code
+under test), which is precisely how the original defect survived.
+
+### 7.3 The regenerated LQR baseline (M1, n = 60, T = 900 s, identical protocol)
+
+| | PRE-fix | **POST-fix** |
+|---|---|---|
+| success rate | 73.3 % | **88.3 %** |
+| settling time, median | 102.9 s | **77.2 s** |
+| final pointing error, mean | 0.733° ¹ | **0.733°** |
+| episodes whose success changed | — | **13 of 60** |
+
+¹ The pre-fix "0.733°" was a real number measuring a **non-physical** angle; the
+post-fix value is the true body-+z-to-nadir error. The two are not comparable
+quantitatively, only in order of magnitude.
+
+**Consequence for the thesis claim:** the classical baseline on the *correct* plant
+is **substantially stronger** — 88.3 % versus 73.3 % — and settles ~25 % faster. No
+valid RL number exists at all until policies are retrained on the fixed plant. The
+published margins (RL 100 % vs LQR 91.7 %; "4× more accurate") are therefore
+**void**, and the honest expectation is that the RL-vs-LQR gap will be much
+smaller than published.
+
+### 7.4 What still stands
+
+- **C2-h's estimator findings** (§6): `J_w Ω̇ = −h·τ_cmd` is axial and frame-free,
+  so identification in **1.8 s with zero error**, the dead-wheel **unobservability**
+  (G13: the allocator commands it exactly zero so the estimator gets 0 updates,
+  yet the same trajectory identifies `h = 0` in **3.2 s** when commanded), the
+  saturation-guard trap, and the noise-matched gate result all remain valid.
+- The **methodology**: pre-registered interpretations, single-knob arms, imported
+  scoring harnesses, append-only errata.
+
+### 7.5 Required follow-up
+
+1. **Retrain every policy** (they all learned a plant with the magnetic and
+   gravity-gradient torques in the wrong frame) and re-run Phase 2, C1, C4.1, C4.2.
+2. Re-measure RL vs LQR on the **paired** harness, and against the
+   **gain-scheduled LQR** — not only the fixed-gain baseline, which is now known to
+   be a weak comparator.
+3. Statistics: multiple training seeds; paired tests; state hold and n with every
+   number.
+4. Re-issue `report-state-1/2` and `PROJECT_BRIEF.md` errata on the same terms.
