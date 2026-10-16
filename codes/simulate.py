@@ -20,6 +20,7 @@ from satellite_adcs.dynamics import SpacecraftDynamics
 from satellite_adcs.sensors import SensorSuite
 from satellite_adcs.estimation import MEKF
 from satellite_adcs.controllers import ADCSController
+from satellite_adcs.quaternion import random_quat
 
 
 def pointing_error_deg(dyn):
@@ -28,7 +29,26 @@ def pointing_error_deg(dyn):
     return np.degrees(np.arccos(np.clip(np.dot(zB_I, nadir), -1, 1)))
 
 
-def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True):
+def make_ic_bias(seed, cfg=None):
+    """Single source of truth for (q0, omega0, gyro_bias) -- G14/step 4.
+
+    Both the RL environment and the classical controller path MUST take their
+    conditions from here, otherwise a comparison is not paired. The pre-fix
+    harness drew ICs from different positions in the same RNG stream, and gave
+    the RL side one frozen bias for all episodes while LQR got a fresh one.
+    """
+    if cfg is None:
+        cfg = load_config()
+    rng = np.random.default_rng(10000 + int(seed))
+    q0 = random_quat(rng)
+    wmax = np.radians(cfg["satellite"]["initial"]["omega_max_deg_per_s"])
+    omega0 = rng.uniform(-wmax, wmax, 3)
+    bias = cfg["sensors"]["gyro"]["bias_rad_s"] * rng.normal(size=3)
+    return q0, omega0, bias
+
+
+def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
+                ic=None, gyro_bias=None):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -38,7 +58,12 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True):
     est = MEKF(cfg)
     ctrl = ADCSController(cfg, dyn.J, dyn.mu, dyn.a, rng)
     ctrl.momentum_mgmt = momentum_mgmt
-    dyn.reset()
+    if ic is not None:
+        dyn.reset(q=np.asarray(ic[0], float), omega=np.asarray(ic[1], float))
+        if gyro_bias is not None:
+            sensors.set_bias(gyro_bias)
+    else:
+        dyn.reset()
     if rw_health is not None:
         dyn.set_rw_health(rw_health)
     est.q_hat = np.array([1.0, 0, 0, 0])

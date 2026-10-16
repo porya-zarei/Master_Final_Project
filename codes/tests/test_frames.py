@@ -219,6 +219,46 @@ def test_controller_error_frame_rotation():
         "the error-frame rotation does not map reference coords to body coords"
 
 
+# ---------------------------------------------------------------- harness T9
+def test_paired_harness_conditions():
+    """Step 4: the RL path and the classical path must be able to share the SAME
+    initial condition and gyro bias, or an RL-vs-LQR comparison is not paired."""
+    cfg = load_config()
+    from satellite_adcs.environment.adcs_env import ADCSEnv
+    from simulate import make_ic_bias, run_episode
+
+    # (a) the shared generator is deterministic and shaped correctly
+    a1 = make_ic_bias(3, cfg)
+    a2 = make_ic_bias(3, cfg)
+    for x, y in zip(a1, a2):
+        assert np.allclose(x, y), "make_ic_bias is not deterministic"
+    q0, w0, b0 = a1
+    assert abs(np.linalg.norm(q0) - 1.0) < 1e-12 and w0.shape == (3,) and b0.shape == (3,)
+
+    # (b) the RL env honours an injected condition EXACTLY
+    env = ADCSEnv(fault_mode="none", episode_time=5.0, control_hz=5.0, seed=0)
+    env.reset(seed=3, options={"q": q0, "omega": w0, "gyro_bias": b0})
+    assert np.allclose(env.dyn.q, q0, atol=1e-12), "env did not take the injected q0"
+    assert np.allclose(env.dyn.omega, w0, atol=1e-12), "env did not take the injected omega0"
+    assert np.allclose(env.sensors.gyro_bias, b0, atol=1e-15), "env did not take the bias"
+    env.close()
+
+    # (c) the classical path starts from the same injected attitude. Compare the
+    # first pointing error with the value implied by q0 alone: one 0.2 s step of
+    # wheel torque cannot move a 35 kg satellite more than a fraction of a degree,
+    # whereas a DIFFERENT initial condition gives a wildly different angle.
+    rng = np.random.default_rng(0)
+    from satellite_adcs.dynamics import SpacecraftDynamics
+    d = SpacecraftDynamics(cfg, rng)
+    d.reset(q=q0, omega=w0)
+    expect = np.degrees(np.arccos(np.clip(
+        (_C_NB_scipy(d.q) @ np.array([0.0, 0.0, 1.0])) @ (-d.r / np.linalg.norm(d.r)),
+        -1, 1)))
+    res = run_episode(cfg, seed=3, T=0.2, ic=(q0, w0), gyro_bias=b0)
+    assert abs(res["pe"][0] - expect) < 2.0, \
+        f"run_episode ignored the injected IC (got {res['pe'][0]:.2f}, expected ~{expect:.2f})"
+
+
 # --------------------------------------------------------------------- runner
 def main():
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]

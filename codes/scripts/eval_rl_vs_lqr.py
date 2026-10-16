@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from satellite_adcs.config import load_config
 from satellite_adcs.environment.adcs_env import ADCSEnv
-from simulate import run_episode, settling_time
+from simulate import make_ic_bias, run_episode, settling_time
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
@@ -37,13 +37,18 @@ SETTLE_DEG = 1.0
 HOLDS = (10.0, 30.0)
 
 
-def eval_rl(model, vecnorm, health, n, T=300.0, holds=HOLDS):
+def eval_rl(model, vecnorm, health, n, T=300.0, holds=HOLDS, ics=None):
     """Roll the policy on the env with a fixed wheel health; return metrics."""
     env = ADCSEnv(fault_mode="none", episode_time=T, seed=0)
     pes = []
     settled = {float(h): [] for h in holds}
     for ep in range(n):
-        env.reset(seed=ep)
+        # PAIRED: the very same (q0, omega0, gyro_bias) the LQR side will get.
+        opts = None
+        if ics is not None:
+            q0, w0, b0 = ics[ep]
+            opts = {"q": q0, "omega": w0, "gyro_bias": b0}
+        env.reset(seed=ep, options=opts)
         env.dyn.set_rw_health(np.array(health, dtype=float))  # force the fault case
         done = False
         pe_series = []
@@ -88,13 +93,17 @@ def main():
         if os.path.exists(a.vecnorm) else None
 
     results = {}
+    # one IC + bias per episode index, shared by BOTH controllers (paired design)
+    ics = [make_ic_bias(k, cfg) for k in range(a.n)]
     for name, health in CASES.items():
-        rl = eval_rl(model, vecnorm, health, a.n, T=a.lqr_T)
+        rl = eval_rl(model, vecnorm, health, a.n, T=a.lqr_T, ics=ics)
         # LQR on the same fault, scored under the SAME holds as the RL side
         fin = []
         settled = {float(h): [] for h in HOLDS}
         for seed in range(a.n):
-            res = run_episode(cfg, seed=seed, T=a.lqr_T, rw_health=health)
+            q0, w0, b0 = ics[seed]
+            res = run_episode(cfg, seed=seed, T=a.lqr_T, rw_health=health,
+                              ic=(q0, w0), gyro_bias=b0)
             for h in HOLDS:
                 st = settling_time(res["t"], res["pe"],
                                    threshold=SETTLE_DEG, hold=float(h))

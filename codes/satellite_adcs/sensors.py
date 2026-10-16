@@ -27,6 +27,12 @@ class SensorSuite:
             self.cfg["gyro"]["bias_rad_s"],
         ]) * self.rng.normal(size=3)
 
+    def set_bias(self, bias):
+        """Force an explicit gyro bias (used by the paired evaluation harness so
+        that RL and LQR see the SAME bias, and by tests)."""
+        self.gyro_bias = np.asarray(bias, dtype=float).copy()
+        return self
+
     def measure(self, dyn):
         """Return a dict of measurements from the true state."""
         s = self.cfg

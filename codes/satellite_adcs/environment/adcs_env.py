@@ -148,7 +148,13 @@ class ADCSEnv(gym.Env):
             self.rng = np.random.default_rng(seed)
             self.dyn.rng = self.rng
             self.sensors.rng = self.rng
-        self.dyn.reset()
+        # `options` lets a caller inject the initial condition and gyro bias so
+        # that two different controllers can be compared on IDENTICAL conditions
+        # (paired evaluation). Default path: draw from `self.rng`, unchanged.
+        opt = options or {}
+        self.dyn.reset(q=opt.get("q", None), omega=opt.get("omega", None))
+        if opt.get("gyro_bias") is not None:
+            self.sensors.set_bias(opt["gyro_bias"])
         self.dyn.set_rw_health(self._sample_health())
         self.est.q_hat = np.array([1.0, 0, 0, 0])
         self.est.P = np.eye(3) * 1e-2
