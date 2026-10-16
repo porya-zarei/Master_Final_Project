@@ -308,6 +308,38 @@ cd codes && PYTHONPATH=. ./venv/Scripts/python.exe scripts/train_rl.py --algo pp
     --n_envs 8 --device cpu --out results/rl_shaped_v2
 ```
 
+
+**Step 5 (part) — LQR regenerated on the fixed plant** (`m1_validation_60_v2`, `fault_experiment_v2`,
+`results/lqr_variants/`). No RL number is valid until policies are retrained.
+
+| experiment | PRE-fix | POST-fix |
+|---|---|---|
+| M1, n=60: success / settle median | 73.3 % / 102.9 s | **88.3 % / 77.2 s** (13/60 episodes flipped) |
+| Phase 1B, n=24: healthy | — | **100 % / 0.70°** |
+| Phase 1B, n=24: RW1 @ 50 % | — | **100 % / 0.70°** — *bit-identical to healthy* |
+| Phase 1B, n=24: RW1 dead | — | **4.2 % / 86.35°** |
+
+**The 50 % fault is perfectly masked for LQR too** — the allocator inverts it with ground truth
+(G13), so there is **no headroom for any policy to beat LQR at 50 % health**, and the healthy case is
+already at 100 % from a plain LQR. The RL-vs-LQR contest is therefore decided entirely by the
+**dead wheel**, precision, and generalization to unseen faults.
+
+**Classical baseline strengthened as far as it goes** (`compare_lqr_variants.py`, n=8, paired, both
+holds; ε swept):
+
+| case | fixed LQR | sched ε=0.05 | sched ε=0.20 |
+|---|---|---|---|
+| healthy | 87.5 % / 0.736° | 87.5 % / **0.736°** | 87.5 % / **0.736°** |
+| RW1 @ 50 % | 87.5 % / **0.736°** | 87.5 % / 0.805° | 87.5 % / 0.805° |
+| RW1 dead | 0 % / 98.92° | 0 % / **94.43°** | 0 % / 96.49° |
+
+Reading: scheduling is a **strict no-op at h = 1** (as designed and asserted); it **mildly hurts at
+h = 0.5** because the allocator already masks the fault, so detuning only costs gain; and at the dead
+wheel it improves the residual error by ~4.5° but **does not achieve success in any run**. ⇒ the dead
+wheel is **authority-limited, not tuning-limited**: a fixed-gain LQR is already near the achievable
+limit there. That makes the framing for C7 (recoverability) the honest home for this result — and it
+is exactly the regime where an RL policy *could* still earn its place.
+
 ## 2. Phase C — the evidence-driven workflow
 
 > **C-I does not require C1–C12 regardless of results.** C1 and C4.1 run first; **their evidence
