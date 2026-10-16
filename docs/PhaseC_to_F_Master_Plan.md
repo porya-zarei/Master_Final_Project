@@ -211,7 +211,7 @@ An external audit was received. **Every critical claim was re-tested here agains
 independent implementation (scipy `Rotation`) or a conservation law — it is real.**
 
 Reproduce with: `cd codes && PYTHONPATH=. ./venv/Scripts/python.exe scripts/audit_frame_convention.py`
-(captured output: `codes/results/frame_audit/audit_output.txt`).
+(captured output: `reports/frame_audit_output.txt`; `codes/results/` is gitignored).
 
 | claim | verdict | evidence |
 |---|---|---|

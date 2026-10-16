@@ -1,0 +1,55 @@
+==============================================================================
+T1  convention of quat_to_dcm (q = +90 deg about z)
+==============================================================================
+   equals R_z(+90)=C_NB : True
+   equals R_z(-90)=C_BN : False
+   scipy agrees (active) : True
+   => docstring says C_BN but the function returns C_NB  *** DOCSTRING IS WRONG ***
+
+==============================================================================
+T2  dcm_to_quat inverse of quat_to_dcm?
+==============================================================================
+   exact (signed q) : False   exact up to q <-> -q : True
+
+==============================================================================
+T3  torque-free spin: which reading conserves inertial momentum?
+==============================================================================
+   L_I read as C_BN (docstring): max relative drift = 1.850e+00
+   L_I read as C_NB (active)  : max relative drift = 3.365e-12
+
+==============================================================================
+T4a metric vs TRUTH at random attitudes
+==============================================================================
+   trial 0: reported   65.947   truth   68.827   diff   2.880
+   trial 1: reported  125.022   truth   66.194   diff  58.828
+   trial 2: reported   72.041   truth  114.777   diff  42.736
+   trial 3: reported  117.624   truth   40.099   diff  77.525
+   trial 4: reported   88.783   truth   64.139   diff  24.644
+   trial 5: reported  138.028   truth  111.556   diff  26.472
+   -> max discrepancy 77.53 deg
+
+==============================================================================
+T4b real LQR episode (600 s): reported vs true pointing
+==============================================================================
+   reported = 1.1888 deg   TRUTH = 91.3776 deg
+   reported series min = 0.9416 deg
+
+==============================================================================
+T5  reference-rate sign
+==============================================================================
+   helper self-test: true [0,0,0.7] measured [0.  0.  0.7] -> OK
+   n = 1.106783e-03 rad/s
+   measured omega_LVLH = [ 0.       -0.001109 -0.      ]
+   code uses  [0, +n, 0] = [0.         0.00110678 0.        ]
+   => code is WRONG (sign flipped)
+
+==============================================================================
+T6  does q_ref point at nadir?
+==============================================================================
+   q_ref body+z to nadir, TRUE reading  = 141.6000 deg
+   q_ref body+z to nadir, code's reading = 0.0000 deg
+
+==============================================================================
+T7  after 600 s: is the body aligned with the desired LVLH frame?
+==============================================================================
+   body frame vs desired LVLH frame = 98.341 deg   (0 deg == nadir pointing)
