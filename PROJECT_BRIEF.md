@@ -1,5 +1,11 @@
 # Project Brief — Fault-Tolerant Nanosatellite Attitude Control (M.Sc. Thesis)
 
+> ## ⛔ READ THE ERRATUM AT THE END OF THIS FILE FIRST
+> Every quantitative result quoted in this brief predates the **frame-convention
+> fix (G14, 2026-10-12)** and is **invalid**. The brief's *structure*, roadmap
+> lettering and architecture decisions still stand; its **numbers do not**.
+> Full account: `docs/PhaseC_to_F_Master_Plan.md` §1.3–§1.5.
+
 > **v2 — rewritten 2026-09-11.** Supersedes v1, archived at
 > `docs/archive/PROJECT_BRIEF_v1_SUPERSEDED.md`. v1 was written *before the simulator existed* and
 > describes a codebase that no longer exists — see **§9 Stale claims to discard**.
@@ -199,3 +205,35 @@ The AdaJEPA reference is verified real: *AdaJEPA: An Adaptive Latent World Model
 model *inside* the MPC loop with one self-supervised gradient step per replan. Our addition beyond
 it: a **physics-based validation/safety gate** that rejects an online adaptation step if it would
 raise predicted cost or drift the parameters too far.
+
+---
+
+## ⛔ ERRATUM (2026-10-16) — every number in this document is INVALID
+
+This report was produced with a **transposed attitude matrix**: `quat_to_dcm`
+returned the active `C_NB` (body→inertial) while its docstring *and every caller*
+assumed `C_BN` (inertial→body). There was also a sign error in the guidance
+reference rate. Verified against scipy and against a conservation law:
+
+- the pointing metric differed from the true angle by up to **77.5°** at random
+  attitudes;
+- after 600 s of LQR convergence it reported **1.1888°** while the true
+  body-+z-to-nadir error was **91.3776°**;
+- inertial angular momentum was conserved to 3.4e−12 read as `C_NB` and drifted
+  **185 %** read as `C_BN`.
+
+**Everything here is therefore superseded.** The loop was converging to a
+non-physical attitude and nulling a quantity that was not the pointing error.
+The numbers matched the JSON files — the JSON measured the wrong angle.
+**Matching files is not validation.**
+
+- Full account, evidence and remediation: `docs/PhaseC_to_F_Master_Plan.md`
+  §1.3–§1.5 and `reports/report-state-3.md` §7.
+- Fixed 2026-10-12, pinned by `codes/tests/test_frames.py` (12 tests, including a
+  torque-free momentum-conservation test that any future frame slip will break).
+- Regenerated baseline on the corrected plant: **M1 (LQR, n = 60) succeeds 88.3 %**
+  and settles in a 77.2 s median, against 73.3 % / 102.9 s under this report's
+  protocol — and **13 of 60 episodes changed success status**, so the attitudes
+  reached genuinely differed.
+- **No valid RL number exists** until policies are retrained on the fixed plant;
+  see `reports/report-state-3.md` §7 for the full follow-up list.
