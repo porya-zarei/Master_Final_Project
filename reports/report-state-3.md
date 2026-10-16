@@ -782,3 +782,53 @@ smaller than published.
 3. Statistics: multiple training seeds; paired tests; state hold and n with every
    number.
 4. Re-issue `report-state-1/2` and `PROJECT_BRIEF.md` errata on the same terms.
+
+---
+
+## §8 — Diagnostic: the retrained policy sits at the "do nothing" baseline (2026-10-16)
+
+After the C2-e MEKF was implemented (commit `1ce6f7f`) the policy was retrained on
+the corrected plant. It still did not learn, and this section records exactly how
+far from learning it is. All numbers are single-episode, measured in `ADCSEnv`
+with the canonical config, seed 0, 5 Hz, 900 s (4500 steps).
+
+| policy evaluated in the identical environment | episode return | final error |
+|---|---|---|
+| `a = 0` (do nothing) | −14 614.1 | 59.74° |
+| **the trained policy** (`results/rl_mekf_v2`, mean \|a\| = 0.335, max 0.80) | **−13 952.4** | — |
+| classical LQR, converted into the same action space | **+3 806.8** | **0.27°** |
+
+**The trained policy is 4.5 % better than doing nothing.** It is not collapsed —
+it emits mean action magnitude 0.335 — it is simply ineffective: the policy never
+discovers that a *sustained, coordinated* torque is what reduces the error.
+
+### Supporting evidence
+
+`results/rl_mekf_v2` training summary: `first/last mean = −13717.1 → −11753.6`
+(improving, unlike the pre-MEKF run which degraded −13842 → −14351), `std`
+1.0 → 0.732 against 0.989 → 0.697 for a known-good run (so no premature collapse),
+`explained_variance` 0.919 (vs 0.143 for the known-good run), `clip_fraction`
+0.0285 (vs 0.138), `approx_kl` 0.0046 (vs 0.0117).
+
+The inversion of `explained_variance` is a **symptom, not a cause**: a policy that
+is not improving produces a stationary return that a critic can predict well.
+
+### What this reframes
+
+The problem is **credit assignment**, not reward geometry: the MEKF already moved
+the attainable return from +1407 to +3807 and the in-band fraction from 36 % to
+89 %. A single action changes the return only marginally (the slew takes ~20–40 s,
+i.e. 100–200 steps), so with ~1e4-scale returns the per-action signal-to-noise is
+very small and the actor's updates stay ~5× smaller than in a run that learns.
+
+Consequences worth testing next:
+1. **Curriculum** — start episodes near nadir and anneal the initial error
+   outward. If PPO can learn a reduced-error task but not the full random-
+   attitude task, credit assignment is confirmed as the mechanism.
+2. **Action repeat / lower control rate** for training — shortening the horizon
+   over which credit must propagate.
+3. **Reward shaping with a denser, more immediate gradient** (a pre-registered
+   study, as with C4.2 — not an ad-hoc redesign).
+
+Open: why the identical recipe DID learn on the pre-fix plant. That asymmetry is
+still unexplained and is the strongest remaining clue.
