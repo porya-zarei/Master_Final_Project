@@ -29,18 +29,36 @@ def quat_normalize(q):
 
 
 def quat_to_dcm(q):
-    """Quaternion q_BN -> DCM C_BN (inertial -> body): v_B = C @ v_I."""
+    """Quaternion q_BN -> DCM C_BN (inertial -> body): v_B = C @ v_I.
+
+    G14 (2026-10-12): this function previously returned the TRANSPOSE -- the
+    active body->inertial matrix -- while every caller (B-field, gravity
+    gradient, sun sensor, pointing metric, guidance reference) was written for
+    C_BN. That single mismatch invalidated every pointing number in Phases A-C;
+    see docs/PhaseC_to_F_Master_Plan.md 1.3. `tests/test_frames.py` now pins the
+    convention against scipy so it cannot slip again.
+    """
     q = q / np.linalg.norm(q)
     w, x, y, z = q
     return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
-        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
-        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w)],
+        [2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w)],
+        [2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y)],
     ])
 
 
 def dcm_to_quat(C):
-    """DCM -> quaternion (robust, Shepperd-style)."""
+    """DCM C_BN -> quaternion q_BN: the exact inverse of `quat_to_dcm`.
+
+    `_dcm_to_quat_active` inverts the *active* (body->inertial) convention, so
+    the transpose is taken here to keep this the inverse of the corrected
+    `quat_to_dcm` (G14).
+    """
+    return _dcm_to_quat_active(np.asarray(C, dtype=float).T)
+
+
+def _dcm_to_quat_active(C):
+    """Shepperd-style extraction for the active (body->inertial) convention."""
     tr = np.trace(C)
     q = np.zeros(4)
     if tr > 0:
