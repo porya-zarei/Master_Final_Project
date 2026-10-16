@@ -48,7 +48,7 @@ def make_ic_bias(seed, cfg=None):
 
 
 def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
-                ic=None, gyro_bias=None):
+                ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -56,7 +56,11 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
     dyn = SpacecraftDynamics(cfg, rng)
     sensors = SensorSuite(cfg, rng)
     est = MEKF(cfg)
-    ctrl = ADCSController(cfg, dyn.J, dyn.mu, dyn.a, rng)
+    if controller == "scheduled":
+        from satellite_adcs.gain_scheduled import ScheduledLQRController
+        ctrl = ScheduledLQRController(cfg, dyn.J, dyn.mu, dyn.a, rng, eps=sched_eps)
+    else:
+        ctrl = ADCSController(cfg, dyn.J, dyn.mu, dyn.a, rng)
     ctrl.momentum_mgmt = momentum_mgmt
     if ic is not None:
         dyn.reset(q=np.asarray(ic[0], float), omega=np.asarray(ic[1], float))

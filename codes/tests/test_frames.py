@@ -259,6 +259,41 @@ def test_paired_harness_conditions():
         f"run_episode ignored the injected IC (got {res['pe'][0]:.2f}, expected ~{expect:.2f})"
 
 
+# ------------------------------------------------------------- baseline T10
+def test_gain_scheduled_lqr_is_a_strict_generalisation():
+    """h = 1 must reproduce the fixed baseline exactly; a lost axis must detune."""
+    cfg = load_config()
+    from satellite_adcs.controllers import design_lqr
+    from satellite_adcs.gain_scheduled import scheduled_K, scheduled_R
+    J = np.diag([cfg["satellite"]["inertia"][k]
+                 for k in ("Jxx", "Jyy", "Jzz")])
+    Q = np.diag([1.0, 1.0, 1.0, 0.3, 0.3, 0.3])
+    R0 = np.eye(3) / cfg["actuators"]["reaction_wheels"]["max_torque_Nm"] ** 2
+
+    K_healthy = scheduled_K(J, Q, R0, [1.0, 1.0, 1.0])
+    assert np.allclose(K_healthy, design_lqr(J, Q, R0), atol=1e-12), \
+        "scheduling must be a no-op when healthy"
+
+    K_dead = scheduled_K(J, Q, R0, [0.0, 1.0, 1.0])
+    ax = [np.linalg.norm(K_dead[:, i]) for i in range(3)]
+    axh = [np.linalg.norm(K_healthy[:, i]) for i in range(3)]
+    assert ax[0] < 0.5 * axh[0], f"lost axis not detuned ({ax[0]:.3g} vs {axh[0]:.3g})"
+    # The Riccati solution couples the axes, so the healthy columns DO move a
+    # little; what must hold is that the lost axis is attenuated FAR more than
+    # the surviving ones (an earlier version of this test asserted they were
+    # untouched, which is not true of an LQR gain).
+    rel = [ax[i] / axh[i] for i in range(3)]
+    assert rel[0] < 0.5 * min(rel[1], rel[2]), \
+        f"attenuation is not axis-selective: {['%.3f' % r for r in rel]}"
+    for i in (1, 2):
+        assert rel[i] > 0.5, f"healthy axis {i} was over-detuned ({rel[i]:.3f})"
+    # and it is monotone in authority
+    assert np.allclose(scheduled_R(R0, [1.0, 1.0, 1.0]), R0)
+    norms = [np.linalg.norm(scheduled_K(J, Q, R0, [h, 1.0, 1.0])[:, 0])
+             for h in (1.0, 0.5, 0.05)]
+    assert norms[0] > norms[1] > norms[2], f"gain not monotone in authority: {norms}"
+
+
 # --------------------------------------------------------------------- runner
 def main():
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
