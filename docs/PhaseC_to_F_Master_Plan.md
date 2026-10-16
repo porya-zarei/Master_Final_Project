@@ -184,7 +184,7 @@ Verified by reading the code on 2026-09-11, not from memory.
 > Milestones above are marked `[DONE]` **because they were run and produced evidence.**
 > Nothing else in this document may be marked done on the strength of being described here.
 
-### 1.2 Corrected audit — what is NOT done (G1–G13)
+### 1.2 Corrected audit — what is NOT done (G1–G14)
 
 | # | Gap | Verified evidence | Consequence |
 |---|---|---|---|
@@ -200,9 +200,89 @@ Verified by reading the code on 2026-09-11, not from memory.
 | **G10** | **No plant uncertainty.** Only fault health is randomized. | `satellite.yaml`, `actuators.yaml` | A controller robust to faults but not to a ±10% inertia error is not deployable |
 | **G11** | **No definition of physical recoverability.** "Success" for a dead wheel is demanded over *all* ICs. | `eval_rl_vs_lqr.py:61` — `success = not isinf(settling_time)` over the whole sample | With one dead wheel the system is underactuated; some ICs are **physically unreachable in 900 s**. Counting those as controller failures understates the contribution and is scientifically wrong. |
 | **G12** | **Wheel speed is clipped as a state, not modelled.** | `dynamics.py:197` — `omega_w = clip(±max_speed)` | Silently destroys wheel momentum at saturation (violates `H` conservation). Acceptable placeholder; must be documented, ideally replaced by motor torque roll-off. |
+| **G14** | ⛔ **CRITICAL: the DCM convention is transposed.** `quat_to_dcm` returns C_NB while its docstring (and every consumer) assumes C_BN. | Verified 2026-10-12 §1.3: q=+90°⇒R_z(+90°); torque-free L drift 3.4e−12 vs 185 %; **reported 1.19° vs truth 91.4°** at LQR convergence; `q_ref` inverted; ω_ref sign flipped | **All Phase A–C numbers are invalid** and must be regenerated after the fix. Remediation §1.4. |
 | **G13** | ⚠️ **Control allocation is privileged: `allocate_torque` inverts the fault using GROUND-TRUTH health.** `tau_cmd = tau_des / dyn.rw_health`, so the fault is *masked* whenever `tau_des/h <= tau_max`; the residual is routed to the MTQs. | `controllers.py:35–39`. **Measured (C2-h, 2026-09-28):** on a dead wheel the allocator issues `tau_cmd ≡ 0` — max |τ_cmd| = **0.0** over 4500 steps — so a telemetry-based estimator gets **0 updates** in the whole episode (staleness 99.9%); the *same* wheel-speed trajectory with a non-oracle regressor identifies `h = 0` in **3.2 s** | **Material assumption behind the central claim:** every existing result (Phase 2, C1, C4.1, C4.2) was produced with an oracle allocator, and LQR shares it, so the RL-vs-LQR fault margin is *not* attributable to fault handling by the policy. Worse, the oracle makes a dead wheel **unobservable** to any health estimator, so estimator and allocator cannot be deployed in that order. Resolution = **D-C2h-1(a)** (§2.5.5): keep the oracle as canonical and add an `h_hat` path as a quantified ablation with a detect-then-compensate bootstrap. |
 
 ---
+
+### 1.3 ⛔ CRITICAL — frame-convention defect (audited and independently verified 2026-10-12)
+
+An external audit was received. **Every critical claim was re-tested here against an
+independent implementation (scipy `Rotation`) or a conservation law — it is real.**
+
+Reproduce with: `cd codes && PYTHONPATH=. ./venv/Scripts/python.exe scripts/audit_frame_convention.py`
+(captured output: `codes/results/frame_audit/audit_output.txt`).
+
+| claim | verdict | evidence |
+|---|---|---|
+| `quat_to_dcm` returns **C_NB** though its docstring says C_BN | ✅ **confirmed** | q = +90° about z ⇒ matrix equals R_z(+90°) = C_NB; scipy agrees |
+| inertial angular momentum is conserved only under the body→inertial reading | ✅ **confirmed** | torque-free spin: relative drift **3.4e−12** read as C_NB vs **185 %** read as C_BN |
+| the pointing metric measures the wrong angle | ✅ **confirmed** | random attitudes differ by up to **77.5°**; after 600 s of LQR convergence **reported 1.1888° vs truth 91.3776°** |
+| the guidance reference is inverted | ✅ **confirmed** | `q_ref`'s true body+z is **141.6°** from nadir while the code's own reading says **0.0000°** |
+| the loop converges to a wrong attitude | ✅ **confirmed** | final body frame vs the desired LVLH frame = **98.3°** |
+| the reference rate sign is flipped | ✅ **confirmed** | measured ω_LVLH = [0, **−n**, 0]; code uses [0, **+n**, 0] (n = 1.107e−3 rad/s) |
+| the allocator uses ground-truth health | ✅ **already known** | **G13** |
+| wheel-speed clipping creates momentum from nothing | ✅ **already known** | **G12** |
+| the C2-h results JSON is truncated | ❌ **no longer true** | now 1,029,833 B, parses, all 5 cases present (it *was* a partial file mid-run) |
+| every C4.1/C4.2 arm is a single training seed | ✅ true | already self-reported in report-3 |
+| RL and LQR get different ICs; the RL side re-uses one frozen gyro bias | ✅ **confirmed** | the two eval paths draw ICs from different RNG streams, and `SensorSuite` draws the bias **once at construction** so all RL episodes share it, while `simulate.run_episode` builds a fresh sensor suite per episode |
+
+**Root cause — and why the fix is small.** Every *consumer* in the codebase is written
+for the **C_BN** convention (`C @ v_I` for the B-field, gravity-gradient and sun sensor;
+`C.T @ e_z` for the metric; `dcm_to_quat(C_IL)` for the reference). The defect is that the
+two **primitives** implement the *active* (C_NB) convention instead. The minimal, uniform fix
+is therefore to **transpose `quat_to_dcm` and `dcm_to_quat`** — *not* to edit a dozen call
+sites. (An early hypothesis that the transposition cancelled somewhere is **false**: T4b
+shows the metric off by 91° at convergence, so nothing cancels.)
+
+**Consequence: every Phase A–C number is invalid** — 0.17° / 0.71°, the success rates, C1,
+C4.1, C4.2 and the RL-vs-LQR headline. Note that the reports' numbers *do* match the JSON
+files: the JSON simply measured the wrong angle. **Matching files is not validation** — which
+is precisely what the missing test suite would have caught.
+
+**What survives:** the C2-h *estimator* findings (the wheel equation `J_wΩ̇ = −hτ` is axial
+and frame-free, so identification in 1.8 s and the G13 unobservability stand), the
+methodology of the reward studies, and the erratum discipline. The *closed-loop* C2-h
+evaluation nevertheless ran on the buggy plant and must be repeated.
+
+### 1.4 Remediation plan (PROPOSED — not authorized, no implementation yet)
+
+**Step 0 — freeze.** No new RL training, no allocator work, no LQR tuning. Existing results are
+**kept** as the before/after evidence, not deleted.
+
+**Step 1 — primitives + a regression suite that would have caught this, written FIRST.**
+Transpose `quat_to_dcm` / `dcm_to_quat`; then add `codes/tests/` with (a) DCM-vs-scipy for random
+q, (b) body+z-to-nadir on an attitude with a known analytic answer, (c) **torque-free angular
+momentum conservation** (the catch-all: any future frame slip breaks it), (d) `q_ref` really
+points at nadir, (e) MTQ torque ≡ m × B in the correct frame, (f) guidance rate sign. One
+command runs them all.
+
+**Step 2 — call-site audit.** Enumerate every use of `.C`, `quat_to_dcm`, `dcm_to_quat`,
+`quat_rotate` across `satellite_adcs/` **and** the `scripts/animate_*` / analysis paths, and
+confirm each against the new convention (some may have been compensating).
+
+**Step 3 — fix the reference-rate sign** (`guidance.py:33`, one line) and lock it with a test.
+
+**Step 4 — harness fixes.** A single source of truth for initial conditions so RL and LQR see
+**the same** ICs, and a **fresh gyro bias per episode** for both (or a documented frozen bias for
+both — but the same treatment on each side).
+
+**Step 5 — regenerate, in dependency order**, with retraining (mandatory: every policy learned a
+plant whose magnetic and gravity-gradient torques were in the wrong frame):
+M1 → Phase 1B → Phase 2 (RL baseline) → C1 → C4.1 → C4.2 → C2-h closed loop.
+
+**Step 6 — statistics.** Multiple training seeds per arm; paired tests for paired designs
+(Fisher/McNemar as appropriate); state the hold and the sample size with every number.
+
+**Step 7 — errata** for every previously published figure: report-1/2/3, `PROJECT_BRIEF.md` v2,
+and the Phase-2 headline table.
+
+**Step 8 — then** resume the roadmap (C3a/C3b observation split, then the tail).
+
+**Sequencing note.** The audit's secondary items (weak LQR baseline, statistics) must be
+re-measured **after** Step 1: the audit's own LQR numbers (0.155°, 12/12 at 0.29°) were taken
+through the broken metric and cannot be used as-is. Tuning LQR is premature until the plant is
+right.
 
 ## 2. Phase C — the evidence-driven workflow
 
