@@ -247,25 +247,35 @@ evaluation nevertheless ran on the buggy plant and must be repeated.
 
 ### 1.4 Remediation plan (PROPOSED — not authorized, no implementation yet)
 
-**Step 0 — freeze.** No new RL training, no allocator work, no LQR tuning. Existing results are
-**kept** as the before/after evidence, not deleted.
+**Step 0 — freeze.** ✅ in effect. No new RL training, no allocator work, no LQR tuning. Existing
+results are **kept** as the before/after evidence, not deleted.
 
-**Step 1 — primitives + a regression suite that would have caught this, written FIRST.**
+**Step 1 — primitives + a regression suite that would have caught this, written FIRST.** ✅ **DONE**
+(`3293fb9`) — `quat_to_dcm`/`dcm_to_quat` transposed; `codes/tests/test_frames.py` pins the convention
+against scipy (tests written FIRST and seen to fail: 7/8 red before, green after).
 Transpose `quat_to_dcm` / `dcm_to_quat`; then add `codes/tests/` with (a) DCM-vs-scipy for random
 q, (b) body+z-to-nadir on an attitude with a known analytic answer, (c) **torque-free angular
 momentum conservation** (the catch-all: any future frame slip breaks it), (d) `q_ref` really
 points at nadir, (e) MTQ torque ≡ m × B in the correct frame, (f) guidance rate sign. One
 command runs them all.
 
-**Step 2 — call-site audit.** Enumerate every use of `.C`, `quat_to_dcm`, `dcm_to_quat`,
-`quat_rotate` across `satellite_adcs/` **and** the `scripts/animate_*` / analysis paths, and
-confirm each against the new convention (some may have been compensating).
+**Step 2 — call-site audit.** ✅ **DONE** (`0d73fcb`) — every consumer listed and individually pinned
+by a test; **none** was compensating, so the single primitive fix corrected all of them: `B_body`
+(`dynamics.py:128`), gravity gradient (`:140`), sun sensor (`sensors.py:35`), pointing metric
+(`simulate.py:26`, `adcs_env.py:122`), guidance reference (`guidance.py:30`), the error-frame rotation
+`C_e` (`controllers.py:119`, `adcs_env.py:116,181`), and `quat_rotate`. Two new tests closed the last
+uncovered consumers (sun sensor frame, error-frame rotation).
 
-**Step 3 — fix the reference-rate sign** (`guidance.py:33`, one line) and lock it with a test.
+**Step 3 — fix the reference-rate sign** (`guidance.py:33`, one line). ✅ **DONE** (`0d73fcb`), locked
+by `test_guidance_rate_sign`. **Acceptance evidence:** LQR seed 0, 600 s — before: reported 1.1888° vs
+truth **91.3776°**; after: reported 1.1178° vs truth **1.1178°** (min 0.8482°). The loop now genuinely
+acquires nadir, and the LQR's real accuracy is ~1.1° — the old “0.71°” measured the wrong angle.
 
-**Step 4 — harness fixes.** A single source of truth for initial conditions so RL and LQR see
-**the same** ICs, and a **fresh gyro bias per episode** for both (or a documented frozen bias for
-both — but the same treatment on each side).
+**Step 4 — harness fixes.** ✅ **DONE** (`550211a`) — `simulate.make_ic_bias()` is now the single source
+of truth; `ADCSEnv.reset(options=...)` and `run_episode(ic=, gyro_bias=)` inject it, and
+`eval_rl_vs_lqr.py` hands the **same** (q0, ω₀, bias) triple to both controllers per episode, making the
+comparison genuinely **paired** (what step 6's statistics need). Training behaviour is untouched; the
+question of re-sampling the bias per TRAINING episode is flagged as still open, not silently changed.
 
 **Step 5 — regenerate, in dependency order**, with retraining (mandatory: every policy learned a
 plant whose magnetic and gravity-gradient torques were in the wrong frame):
@@ -283,6 +293,20 @@ and the Phase-2 headline table.
 re-measured **after** Step 1: the audit's own LQR numbers (0.155°, 12/12 at 0.29°) were taken
 through the broken metric and cannot be used as-is. Tuning LQR is premature until the plant is
 right.
+
+**Status: steps 1–4 are DONE** (`3293fb9`, `0d73fcb`, `550211a`) and `tests/test_frames.py` passes
+**11/11**. Steps 5–7 (regeneration, statistics, errata) remain. Every entry point still needs
+**retraining** because every policy learned a plant with the magnetic and gravity-gradient torques in
+the wrong frame:
+
+```bash
+# LQR-only regeneration (cheap, minutes)
+cd codes && PYTHONPATH=. ./venv/Scripts/python.exe scripts/run_m1_validation.py
+cd codes && PYTHONPATH=. ./venv/Scripts/python.exe scripts/run_fault_experiment.py
+# RL retraining (2M steps each; hand over, ~20 min per arm)
+cd codes && PYTHONPATH=. ./venv/Scripts/python.exe scripts/train_rl.py --algo ppo --steps 2000000 \
+    --n_envs 8 --device cpu --out results/rl_shaped_v2
+```
 
 ## 2. Phase C — the evidence-driven workflow
 
