@@ -156,8 +156,14 @@ class ADCSEnv(gym.Env):
         if opt.get("gyro_bias") is not None:
             self.sensors.set_bias(opt["gyro_bias"])
         self.dyn.set_rw_health(self._sample_health())
-        self.est.q_hat = np.array([1.0, 0, 0, 0])
-        self.est.P = np.eye(3) * 1e-2
+        # C2-e: a reset attitude is UNKNOWN, so call the estimator's own reset
+        # rather than poking its fields. Setting only q_hat/P here left b_hat
+        # (the gyro-bias state) and the bias covariance STALE from the previous
+        # episode: harmless while the bias is constant, but wrong whenever the
+        # bias changes between episodes -- exactly what the paired harness does,
+        # which draws a fresh bias per episode. It also silently carried a bias
+        # estimate across resets that never re-derived it.
+        self.est.reset()
         meas = self.sensors.measure(self.dyn)
         self.est.update(meas, self.dyn)
         self._last_gyro = meas["gyro"]

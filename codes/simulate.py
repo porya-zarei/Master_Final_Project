@@ -70,8 +70,9 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
         dyn.reset()
     if rw_health is not None:
         dyn.set_rw_health(rw_health)
-    est.q_hat = np.array([1.0, 0, 0, 0])
-    est.P = np.eye(3) * 1e-2
+    # C2-e: reset the estimator properly -- see the matching note in
+    # adcs_env.reset(). Poking q_hat/P alone left the gyro-bias state stale.
+    est.reset()
 
     dt = sim["dt_s"]
     # integer substeps per control period; the EFFECTIVE period is nctrl*dt, so
