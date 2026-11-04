@@ -261,3 +261,55 @@ control law from 33 episodes. This is a budget error, not an algorithmic one.
    plant, and it did.
 3. Raise the budget to >= 1M steps; report >= 3 seeds.
 4. Only then re-run Experiment 1 (gate) and Experiment 2 (friction).
+
+---
+
+## 9. Milestone D3 — tol_norm reward: still a disadvantage, new failure mode
+
+3 seeds x 300k steps, alpha = 0.2, coulomb = 2e-4, `reward_shape = tol_norm`.
+Paired n = 8; LQR arm from the same harness (0.115 ideal, 1.620 coulomb) validates
+against C2.
+
+| condition | controller | success | median final |
+|---|---|---|---|
+| ideal | LQR | 100 % | 0.115° |
+| ideal | seed 0 / 1 / 2 | 0 % | 6.057° / 4.517° / 11.560° |
+| Coulomb 2e-4 | LQR | 0 % | 1.620° |
+| Coulomb 2e-4 | seed 0 | **25 % (2/8)** | 2.299° |
+| Coulomb 2e-4 | seed 1 | 0 % | 5.417° |
+| Coulomb 2e-4 | seed 2 | 0 % | 10.661° |
+
+### Classification: RL DISADVANTAGE (with one signal worth noting)
+
+Seed 0 reaches **25 % success under Coulomb friction where the LQR gets 0 %** -- the
+first time any policy has beaten the LQR on the metric that matters. But it does so
+with a **worse** median (2.299° vs 1.620°), and seeds 1 and 2 are far worse (5.4°,
+10.7°). At n = 8 a 2/8 vs 0/8 difference is not significant, and the seed spread
+(2.3° -> 10.7°) is larger than the effect. Recorded as a signal, not a result.
+
+### The new failure mode, and why `tol_norm` was the wrong shape
+
+`tol_norm` repaired the near-field gradient (7875 per episode vs 2.4) but destroyed
+the far-field scale: at theta = 0.5 rad the penalty is (0.5/0.01745)^2 = **821 per
+step**. Training returns consequently sat at **-1.2e6 to -1.6e6**. A value function
+spanning 1e6 is badly conditioned, and the policy ends up chasing the acquisition
+transient instead of the terminal precision it was supposed to fix.
+
+**The correct shape is `log`**, which has both properties:
+
+| | far field (theta = 2.7 rad) | gradient 1.6° -> 0.9° per episode |
+|---|---|---|
+| quad | -36/step | **2.4** (no signal) |
+| **log** | **-10/step (bounded)** | **3060** |
+| tol_norm | **-23940/step (1e6/episode)** | 7875 |
+
+`log` gives a 1275x stronger band gradient than `quad` while keeping the far field
+bounded -- and it is the same shape that won the C4.2 study on the worst fault.
+**D4 will use `log`.**
+
+### Unchanged blocker for Experiment 1
+
+The ideal-actuator gate still fails (6.1° / 4.5° / 11.6° vs 0.115°), because training
+is still confined to a single friction value. **No amount of reward shaping fixes a
+policy that has never seen a frictionless actuator.** Friction must be randomised per
+episode across 0 to 3e-4 before Experiment 1 can pass.

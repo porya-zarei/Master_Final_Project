@@ -65,7 +65,7 @@ def main(n=12):
         out[cond] = {"lqr": {"success30": l_succ, "final_median": l_fin,
                              "finals": [round(x["final"], 3) for x in lqr]}}
         for s in SEEDS:
-            path = f"results/residual_sac_s{s}/policy.zip"
+            path = f"results/residual_d3_s{s}/policy.zip"
             if not os.path.exists(path):
                 print(f"  seed {s}: MISSING {path}"); continue
             rows = [_episode("policy", path, coulomb, 0.2, k) for k in range(n)]
