@@ -76,3 +76,73 @@ Re-benchmark **LQR, fault-aware LQR, gain-scheduled LQR and bang-bang** under ea
 effect individually and then combined, at n ≥ 24 paired, reporting the full
 distribution (not a median — see the bimodality in `Milestone_A_Audit.md` §2).
 Only after that does residual SAC (Milestone D) begin.
+
+---
+
+## 6. Milestone C — classical benchmark under the actuator models
+
+LQR, n = 6 paired episodes per configuration, T = 900 s, 1° tolerance held 30 s.
+`t_first` median, final error, success at the 30 s hold, and the standard deviation
+of the pointing error over the last 30 % of the episode (a limit-cycle indicator).
+
+| config | t_first | final | success | tail sigma | entries |
+|---|---|---|---|---|---|
+| ideal | 69.7 s | 0.134° | **100 %** | 0.028 | 1.0 |
+| deadzone | 73.7 s | 0.662° | 100 % | 0.027 | 1.0 |
+| viscous | **411.5 s** | 0.580° | 100 % | 0.054 | 1.0 |
+| **Coulomb** | 47.4 s | **1.690°** | **0 %** | 0.031 | 0.0 |
+| rate_limit | 69.7 s | 0.134° | 100 % | 0.028 | 1.0 |
+| quantised | 70.0 s | 0.269° | 100 % | 0.022 | 1.0 |
+| **combined** | 42.2 s | **2.114°** | **0 %** | **0.114** | 0.0 |
+
+Full `t_first` distributions (the medians hide the bimodality):
+```
+ideal      [58.4, 64.4, 68.0, 71.4, 206.0, 401.2]
+deadzone   [58.4, 68.0, 71.4, 76.0, 150.8, 505.0]
+viscous    [41.0, 46.0, 264.6, 558.4, 709.0, 830.6]
+coulomb    [47.4]                      <- only 1 of 6 ever entered tolerance
+rate_limit [58.4, 64.4, 68.0, 71.4, 206.0, 401.2]
+quantised  [58.2, 66.4, 68.0, 72.0, 188.0, 439.0]
+combined   [42.2]                      <- only 1 of 6
+```
+
+### The finding: lever L2 is LIVE, and it is decisive
+
+**A well-tuned LQR fails the 1° pointing requirement outright under Coulomb
+friction — 0 % success, settling at 1.69°, and 2.11° with all effects combined.
+It never even enters tolerance in 5 of 6 episodes.**
+
+This is not a tuning artefact and it is not a weakened baseline: it is the physical
+consequence of a *speed-dependent bearing torque the controller's model does not
+contain*. Near the target the commanded torque is small, the Coulomb term is not,
+and the wheel cannot deliver the fine correction. The combined case additionally
+shows **sustained oscillation** (tail sigma 0.114 vs 0.028 ideal — a 4x increase),
+i.e. the limit-cycle behaviour the directive anticipated.
+
+### What this means for the thesis
+
+| lever | verdict |
+|---|---|
+| L1 unknown fault | CLOSED |
+| L3 plant uncertainty | CLOSED |
+| L4 time-optimal | LIVE (2.71x, bang-bang captures it) |
+| **L2 actuator friction** | **LIVE and decisive — LQR cannot meet the requirement at all** |
+
+**This is the measured justification for residual RL.** The target is now concrete and
+physical: *restore 1° pointing under actuator friction where a tuned LQR achieves
+0 % success.* That is not a metric chosen to favour RL — it is the mission requirement
+(the 0.1–1° class pointing spec) being violated by a real actuator effect.
+
+### Honest limits — do not overclaim this
+
+1. **n = 6.** Small. The 0 % is consistent across 6/6 episodes and 5/6 never entering
+   tolerance, so the direction is credible, but **n >= 24 is required before citing it.**
+2. **The friction parameters are assumptions** (§2), not datasheet values. A different
+   Coulomb magnitude moves the failure point. The claim must be stated with the
+   assumed value attached.
+3. **`rate_limit` had no effect at all** (identical to ideal) because the LQR's commands
+   are already smooth — worth reporting, since it shows the limit does not bind for a
+   smooth controller but might for a switching one.
+4. The Coulomb case is *faster* to first entry (47.4 s) because friction adds damping;
+   it is the **holding** accuracy that collapses. First-entry speed and sustained
+   accuracy must always be reported separately — the same lesson as §2 of the audit.

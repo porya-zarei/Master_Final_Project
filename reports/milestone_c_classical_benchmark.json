@@ -1,0 +1,129 @@
+{
+  "configs": {
+    "ideal": {
+      "params": {},
+      "n": 6,
+      "t_first_median": 69.70000000000044,
+      "t_first_all": [
+        58.4,
+        64.4,
+        68.0,
+        71.4,
+        206.0,
+        401.2
+      ],
+      "final_median": 0.13406069932899986,
+      "success30": 100.0,
+      "pe_std_tail_median": 0.027762818508532718,
+      "entries_median": 1.0
+    },
+    "deadzone": {
+      "params": {
+        "deadzone_Nm": 0.0001
+      },
+      "n": 6,
+      "t_first_median": 73.7000000000005,
+      "t_first_all": [
+        58.4,
+        68.0,
+        71.4,
+        76.0,
+        150.8,
+        505.0
+      ],
+      "final_median": 0.6616477432380858,
+      "success30": 100.0,
+      "pe_std_tail_median": 0.02645266295619003,
+      "entries_median": 1.0
+    },
+    "viscous": {
+      "params": {
+        "friction_viscous_Nms": 2e-06
+      },
+      "n": 6,
+      "t_first_median": 411.49999999999176,
+      "t_first_all": [
+        41.0,
+        46.0,
+        264.6,
+        558.4,
+        709.0,
+        830.6
+      ],
+      "final_median": 0.5795642378305221,
+      "success30": 100.0,
+      "pe_std_tail_median": 0.05385413846000013,
+      "entries_median": 1.0
+    },
+    "coulomb": {
+      "params": {
+        "friction_coulomb_Nm": 0.0002
+      },
+      "n": 6,
+      "t_first_median": 47.400000000000134,
+      "t_first_all": [
+        47.4
+      ],
+      "final_median": 1.6897865090339492,
+      "success30": 0.0,
+      "pe_std_tail_median": 0.031317222877810344,
+      "entries_median": 0.0
+    },
+    "rate_limit": {
+      "params": {
+        "rate_limit_Nm_per_s": 0.05
+      },
+      "n": 6,
+      "t_first_median": 69.70000000000044,
+      "t_first_all": [
+        58.4,
+        64.4,
+        68.0,
+        71.4,
+        206.0,
+        401.2
+      ],
+      "final_median": 0.13407279104188627,
+      "success30": 100.0,
+      "pe_std_tail_median": 0.027766623966842104,
+      "entries_median": 1.0
+    },
+    "quantised": {
+      "params": {
+        "quant_step_Nm": 0.0001
+      },
+      "n": 6,
+      "t_first_median": 70.00000000000045,
+      "t_first_all": [
+        58.2,
+        66.4,
+        68.0,
+        72.0,
+        188.0,
+        439.0
+      ],
+      "final_median": 0.2694364761337237,
+      "success30": 100.0,
+      "pe_std_tail_median": 0.022388251552037875,
+      "entries_median": 1.0
+    },
+    "combined": {
+      "params": {
+        "deadzone_Nm": 0.0001,
+        "friction_viscous_Nms": 2e-06,
+        "friction_coulomb_Nm": 0.0002,
+        "rate_limit_Nm_per_s": 0.05,
+        "quant_step_Nm": 0.0001
+      },
+      "n": 6,
+      "t_first_median": 42.20000000000006,
+      "t_first_all": [
+        42.2
+      ],
+      "final_median": 2.113832139240822,
+      "success30": 0.0,
+      "pe_std_tail_median": 0.11442308179143335,
+      "entries_median": 0.0
+    }
+  }
+}
