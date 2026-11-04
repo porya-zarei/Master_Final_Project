@@ -1,0 +1,38 @@
+{
+  "healthy": {
+    "rl": {
+      "final_mean": 0.22874944151294052,
+      "success_hold10s": 100.0,
+      "success_hold30s": 100.0
+    },
+    "lqr": {
+      "final_mean": 0.17471422935003986,
+      "success_hold10s": 100.0,
+      "success_hold30s": 100.0
+    }
+  },
+  "rw1_50pct": {
+    "rl": {
+      "final_mean": 0.24322183830508018,
+      "success_hold10s": 100.0,
+      "success_hold30s": 100.0
+    },
+    "lqr": {
+      "final_mean": 0.17501482756128278,
+      "success_hold10s": 100.0,
+      "success_hold30s": 100.0
+    }
+  },
+  "rw1_failed": {
+    "rl": {
+      "final_mean": 63.660972631790784,
+      "success_hold10s": 12.5,
+      "success_hold30s": 0.0
+    },
+    "lqr": {
+      "final_mean": 91.22068575420454,
+      "success_hold10s": 0.0,
+      "success_hold30s": 0.0
+    }
+  }
+}

@@ -832,3 +832,50 @@ Consequences worth testing next:
 
 Open: why the identical recipe DID learn on the pre-fix plant. That asymmetry is
 still unexplained and is the strongest remaining clue.
+
+---
+
+## §9 — First valid RL-vs-LQR comparison on the corrected plant (2026-10-16)
+
+The first comparison whose numbers mean what they say: correct frame, real MEKF,
+**paired** initial conditions and gyro bias for both controllers.
+
+Policy: `results/rl_mekf_s1` (PPO, 2M steps, **seed 1**; seed 0 failed — see §8).
+Eval: `scripts/eval_rl_vs_lqr.py --n 8`, 900 s at 5 Hz, paired conditions.
+Artifacts: `reports/rl_vs_lqr_s1.json`, `reports/figures/rl_vs_lqr_s1.png`.
+
+| case | RL success h10/h30 | RL final | LQR success h10/h30 | LQR final |
+|---|---|---|---|---|
+| healthy | 100 % / 100 % | 0.229° | 100 % / 100 % | 0.175° |
+| RW1 @ 50 % | 100 % / 100 % | 0.243° | 100 % / 100 % | 0.175° |
+| **RW1 dead** | **12.5 % / 0 %** | **63.66°** | 0 % / 0 % | 91.22° |
+
+### Reading
+
+1. **Healthy and 50 %: parity in success.** RL is 0.054° and 0.068° behind on final
+   error (31 % and 39 % relatively) but both sit far inside the 1° criterion.
+   This is the *predicted* outcome: the allocator inverts with ground-truth health
+   (G13), so at h = 0.5 the fault is fully masked and **no controller can beat the
+   LQR there**. Parity is the correct result, not a shortfall.
+2. **Dead wheel: RL is the only controller that succeeds at all** (1/8 vs 0/8) and
+   leaves a **27.56° smaller residual** (63.66° vs 91.22°). This is the one regime
+   where the fault cannot be masked — the allocator has no authority to
+   redistribute — and it is exactly where RL was expected to earn its place.
+
+### Caveats — stated plainly, do not overclaim
+
+- **n = 8.** 1/8 vs 0/8 is *not* statistically significant (Fisher exact p ≈ 1.0).
+  The 27.6° residual difference is the more meaningful signal at this sample size,
+  not the success count.
+- **One training seed.** Seed 0 failed outright (§8), so this policy's existence is
+  at present seed-favourable. Any claim needs ≥ 3–5 seeds.
+- The LQR here is **fixed-gain**. The gain-scheduled variant reached 94.43° residual
+  on the dead wheel in its own n = 8 sweep — on a *different* IC set, so it must be
+  redone paired before comparison.
+
+### What this changes
+
+The contest is now **measurable**, and its shape is what was predicted before the
+fix: parity wherever the allocator masks the fault, and an RL advantage only on the
+dead wheel. Defensible and honest — but it needs n ≥ 24 and multiple seeds before it
+is a result rather than a signal.
