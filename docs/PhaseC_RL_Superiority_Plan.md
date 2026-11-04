@@ -205,3 +205,67 @@ Freeze the canonical result. Only then decide what the thesis claims.
 If, after M1–M5, RL still does not beat LQR, the thesis reports that — with the
 benchmark documented as fair, realistic and pre-registered. That outcome is defensible.
 An inflated win is not.
+
+---
+
+## 5. M5 PRE-REGISTRATION — time-optimal policy (frozen before training)
+
+Committed **before** any time-optimal training, per rule R2. No term, metric or
+threshold below may be changed after results are seen.
+
+### 5.1 Why this is the primary lever
+
+Measured (`reports/report-state-3.md` §12, `reports/l4_headroom.json`): the LQR's
+median settle is **241.3 s** against a **19.8 s** bang-bang lower bound — a **9.08×**
+gap (range 3.17–25.41×), using the bound most favourable to the LQR. This is a
+structural consequence of a quadratic cost being smooth, not a tuning artefact.
+
+### 5.2 Objective (fixed)
+
+Replace the precision-only reward with a **time-to-target** reward:
+
+    r_t = -1                      (per control step: minimise time)
+        - k_theta * theta^2       (k_theta = 0.01, keep a gradient far from target)
+        + BONUS                   when theta < 1 deg, for the first time
+    BONUS = +500, awarded ONCE per episode on first entry into tolerance, so the
+    optimal policy is to arrive early and stay, not to dawdle.
+
+Rationale for each term: `-1/step` makes time the currency; `k_theta` keeps a
+usable gradient while far away (the failure mode of §8 was a flat signal);
+the one-off bonus prevents the "arrive late, then farm the tolerance band"
+degeneracy that a per-step bonus would create.
+
+### 5.3 Metrics (fixed, primary first)
+
+1. **PRIMARY: time-to-first-entry into 1°** (`t_first`), median over paired episodes.
+2. Secondary: settle time with a 10 s hold; success at 10 s and 30 s holds; final error;
+   control effort; wheel-speed margin.
+3. Chatter index: mean |Δτ_cmd| near the target (seconds-order check that a fast
+   policy did not simply bang-bang forever).
+
+### 5.4 Pass / fail (fixed)
+
+- **PASS** if the policy's median `t_first` is **≥ 25 % lower** than the LQR's, with
+  a 95 % bootstrap CI on the difference excluding zero, at **n ≥ 24 paired episodes**
+  and **≥ 3 training seeds**.
+- **PARTIAL** if 10–25 % faster with a CI excluding zero.
+- **FAIL** otherwise, and the failure is reported with the same prominence.
+
+A faster policy that violates the precision criterion (final error > 1°) is a **FAIL**,
+not a win: speed at the cost of pointing is not the objective.
+
+### 5.5 Controls (fixed)
+
+- The LQR is compared at its **existing tuning**, plus the gain-scheduled variant.
+- A hand-built **bang-bang baseline** (full torque toward the target, switching on the
+  rate condition) is reported alongside, because it is the honest reference for what
+  "time-optimal" means here. If the policy cannot beat a trivial bang-bang rule, that
+  is the finding.
+- Same paired initial conditions and gyro bias for every controller.
+
+### 5.6 What would falsify the thesis's L4 claim
+
+If a bang-bang baseline and the policy both fail to beat the LQR on `t_first`, then the
+9× bound is not reachable in practice (rate nulling, wheel saturation, or three-axis
+coupling dominates) and **L4 is closed too** — leaving the thesis with the honest
+negative result plus the methodological contributions. That outcome will be reported.
