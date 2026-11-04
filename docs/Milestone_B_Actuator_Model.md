@@ -146,3 +146,55 @@ physical: *restore 1° pointing under actuator friction where a tuned LQR achiev
 4. The Coulomb case is *faster* to first entry (47.4 s) because friction adds damping;
    it is the **holding** accuracy that collapses. First-entry speed and sustained
    accuracy must always be reported separately — the same lesson as §2 of the audit.
+
+---
+
+## 7. Milestone C2 — the Coulomb failure is robust, monotonic and complete
+
+Milestone C's 0 % success at `friction_coulomb_Nm = 2e-4` rested on n = 6 and a single
+assumed magnitude. This sweeps the magnitude at **n = 16 paired** episodes.
+
+| Coulomb (N·m) | success (30 s hold) | median final | ever entered tolerance | median t_first |
+|---|---|---|---|---|
+| 0 | **100.0 %** | 0.213° | 100 % | 178.6 s |
+| 1e-4 | **85.9 %** | 0.813° | 93.8 % | 266.2 s |
+| **2e-4** | **0.0 %** | 1.602° | **18.8 %** | 144.0 s |
+| **3e-4** | **0.0 %** | 2.388° | **18.8 %** | 145.8 s |
+
+Final-error distributions per episode:
+
+```
+0     0.049 - 0.638   (all below 1 deg)
+1e-4  0.277 - 1.136   (spread across the threshold)
+2e-4  1.080 - 1.860   (ALL 16 above 1 deg)
+3e-4  1.767 - 2.631   (all far above)
+```
+
+### Verdict: the justification for residual RL is solid
+
+1. **Monotonic.** Degradation tracks the friction magnitude; there is no discontinuity
+   at a single "magic" value.
+2. **Complete at 2e-4.** Not "mostly fails" — **16 of 16 episodes** end above 1°, with a
+   minimum of 1.080°. 0/16 success is not a sampling accident.
+3. **Systematic offset, not scatter.** At 2e-4 the final error clusters tightly around
+   1.5-1.9° across very different initial conditions. That is the signature of a
+   stick-slip deadband: the wheel cannot deliver the small torque the controller asks
+   for, so the attitude parks where demand equals friction. It is a physical bias, not
+   noise, which is exactly the kind of error a learned residual can cancel.
+4. **The threshold sits between 1e-4 and 2e-4 N·m** — i.e. **~1-2 % of the 0.01 N·m
+   wheel rating.** That is the physically defensible statement to carry into the thesis.
+
+### The precise claim to make (and its caveat)
+
+> Above roughly **1.5e-4 N·m** of Coulomb breakaway friction — 1-2 % of the wheel's
+> rated torque — a well-tuned LQR cannot hold the 1° pointing requirement, achieving
+> **0/16** successes at 2e-4 N·m.
+
+Caveat that must travel with it: the magnitude is an **assumed** wheel property
+(§2), not a datasheet value. The *shape* of the result (monotonic, complete, systematic
+offset) is robust; the exact threshold depends on the assumption. Stating both is what
+makes the claim honest and defensible.
+
+**This is the measured justification for residual RL:** a physical actuator effect, at
+a plausible magnitude, destroys the mission requirement for the classical controller —
+and leaves a structured, learnable error.
