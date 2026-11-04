@@ -1,0 +1,84 @@
+{
+  "T_fault": 300.0,
+  "T_episode": 900.0,
+  "cases": {
+    "healthy": {
+      "lqr_true": {
+        "n": 8,
+        "final_mean": 0.17471422935003986,
+        "success_hold10s": 100.0,
+        "success_hold30s": 100.0,
+        "recovered": 0,
+        "recovery_median_s": null,
+        "overshoot_max_deg": null,
+        "h_hat_final_mean": null
+      },
+      "lqr_hat": {
+        "n": 8,
+        "final_mean": 0.17471422935085243,
+        "success_hold10s": 100.0,
+        "success_hold30s": 100.0,
+        "recovered": 0,
+        "recovery_median_s": null,
+        "overshoot_max_deg": null,
+        "h_hat_final_mean": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    },
+    "rw1_50pct": {
+      "lqr_true": {
+        "n": 8,
+        "final_mean": 0.17471422935003986,
+        "success_hold10s": 100.0,
+        "success_hold30s": 100.0,
+        "recovered": 8,
+        "recovery_median_s": 0.0,
+        "overshoot_max_deg": 1.2470103291659893,
+        "h_hat_final_mean": null
+      },
+      "lqr_hat": {
+        "n": 8,
+        "final_mean": 0.17471428954114201,
+        "success_hold10s": 100.0,
+        "success_hold30s": 100.0,
+        "recovered": 8,
+        "recovery_median_s": 0.0,
+        "overshoot_max_deg": 1.2560592279082823,
+        "h_hat_final_mean": [
+          0.5,
+          1.0,
+          1.0
+        ]
+      }
+    },
+    "rw1_failed": {
+      "lqr_true": {
+        "n": 8,
+        "final_mean": 1.6358488518234553,
+        "success_hold10s": 25.0,
+        "success_hold30s": 25.0,
+        "recovered": 2,
+        "recovery_median_s": 307.8000000000012,
+        "overshoot_max_deg": 9.598774324577482,
+        "h_hat_final_mean": null
+      },
+      "lqr_hat": {
+        "n": 8,
+        "final_mean": 1.6358907512751384,
+        "success_hold10s": 25.0,
+        "success_hold30s": 25.0,
+        "recovered": 2,
+        "recovery_median_s": 308.2000000000013,
+        "overshoot_max_deg": 9.598922591140042,
+        "h_hat_final_mean": [
+          0.0,
+          1.0,
+          1.0
+        ]
+      }
+    }
+  }
+}

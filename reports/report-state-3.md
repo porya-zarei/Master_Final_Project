@@ -929,3 +929,55 @@ tuned LQR on this task, with the apparent advantage fully explained.**
 If a positive-control result is required, the problem must change — the current
 one is near-linear with a strong classical solution. Candidate directions are
 listed in the plan; none should be entered without a pre-registered protocol.
+
+---
+
+## §11 — M1: removing the oracle costs the classical controller nothing (2026-10-16)
+
+Fault applied **mid-flight at t = 300 s** (the realistic case: the failure happens
+after acquisition). Paired ICs and paired gyro bias; both arms share the estimator,
+the gains and the actuator model. The ONLY difference is what the allocator is told.
+n = 8, T = 900 s at 5 Hz.
+
+| case | arm | success h10/h30 | final | recovered | peak after fault | h_hat final |
+|---|---|---|---|---|---|---|
+| healthy | true / hat | 100 / 100 | 0.17° | — | — | [1,1,1] |
+| RW1 @ 50 % | true | 100 / 100 | 0.17° | 8/8, 0 s | 1.2° | — |
+| RW1 @ 50 % | **hat** | 100 / 100 | 0.17° | 8/8, 0 s | 1.3° | **[0.5,1,1]** |
+| RW1 dead | true | 25 / 25 | 1.64° | 2/8, 308 s | 9.6° | — |
+| RW1 dead | **hat** | 25 / 25 | 1.64° | 2/8, 308 s | 9.6° | **[0,1,1]** |
+
+### Verdict: lever L1 is CLOSED
+
+`LQR(hat)` is **identical** to `LQR(true)` in every case. The estimator identifies
+both faults (0.5 and 0.0) and the allocation therefore matches the oracle. **An
+unknown fault gives a learned policy nothing to exploit**, because the classical
+controller can already learn what it needs from the same telemetry. M2 (adaptive
+observation redesign) is consequently de-prioritised: it was premised on L1 being a
+lever, and the measurement says it is not.
+
+### G13 was too strong, and is now corrected
+
+A fault present **from t = 0** is unobservable under an oracle allocator (τ_cmd = 0 →
+no regressor excitation). A fault occurring **in flight** is observable, because the
+wheel was healthy and being commanded beforehand, so the regressor has excitation:
+identified as [0,1,1] here. G13 should read *"unobservable when the wheel is dead from
+the start"*, not *"unobservable"*.
+
+### The dead-wheel "catastrophe" was a scenario artefact
+
+| scenario | final error | success |
+|---|---|---|
+| dead wheel from t = 0 (earlier results) | **81.96°** | 0 % |
+| dead wheel at t = 300 s (this section) | **1.64°** | 25 % |
+
+The 82° figure came from acquiring a random attitude with a third of the authority
+already gone. Real failures happen after acquisition. **The honest dead-wheel number
+is ~1.6° with a 9.6° transient peak**, and the earlier "authority-limited disaster"
+framing must be corrected in the thesis text.
+
+### Where the RL advantage must therefore come from
+
+Not from unknown faults. The remaining levers are **L3 plant uncertainty / held-out
+generalization** (strongest defensible claim) and **L4 time-optimal slew** (a provable
+structural limitation of any LQR). L2 (actuator nonlinearity) is secondary.

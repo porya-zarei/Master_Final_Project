@@ -48,7 +48,8 @@ def make_ic_bias(seed, cfg=None):
 
 
 def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
-                ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05):
+                ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05,
+                fault_at=None, health_source="true"):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -68,7 +69,11 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
             sensors.set_bias(gyro_bias)
     else:
         dyn.reset()
-    if rw_health is not None:
+    # M1: with fault_at the fault is applied DURING the episode, which is the
+    # regime where adaptation can matter (a fault present from t=0 is already
+    # masked by the allocator from the first step).
+    fault_pending = rw_health is not None and fault_at is not None
+    if rw_health is not None and not fault_pending:
         dyn.set_rw_health(rw_health)
     # C2-e: reset the estimator properly -- see the matching note in
     # adcs_env.reset(). Poking q_hat/P alone left the gyro-bias state stale.
@@ -79,12 +84,33 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
     # the labeled time axis equals the simulated time (both RL env and LQR).
     nctrl = max(1, int(round((1.0 / sim["control_hz"]) / dt)))
     ctrl_period = nctrl * dt
+
+    # M1 (D-C2h-1a): the estimated-allocation arm. The estimator is driven ONLY
+    # by the previous commanded wheel torque and the measured wheel speed.
+    h_est = None
+    if health_source == "hat":
+        from satellite_adcs.health_estimation import WheelHealthEstimator
+        _rw = cfg["actuators"]["reaction_wheels"]
+        h_est = WheelHealthEstimator(rw_J=float(_rw["inertia_kgm2"]),
+                                     control_period=ctrl_period)
+        h_est.reset()
+        h_est.prime(dyn.omega_w)
+        ctrl.health_source = "hat"
+    prev_tau_rw = np.zeros(3, dtype=float)
     t = 0.0
     t_arr, pe, om, ow, ph = [], [], [], [], []
     while t < T:
+        if fault_pending and t >= float(fault_at):
+            dyn.set_rw_health(rw_health)
+            fault_pending = False
+        if h_est is not None:
+            h_est.update(prev_tau_rw, dyn.omega_w)
+            ctrl.health_hat = h_est.h.copy()
         meas = sensors.measure(dyn)
         est.update(meas, dyn)                       # correct to CURRENT measurement
         tau_rw, m = ctrl.control(meas, est, dyn, t, ctrl_period)
+        if h_est is not None:
+            prev_tau_rw = np.asarray(tau_rw, dtype=float).copy()
         # step dynamics AND propagate estimator in lockstep (same elapsed time)
         for _ in range(nctrl):
             dyn.step(dt, tau_rw, m)
@@ -97,7 +123,8 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
         ph.append(ctrl.phase)
 
     return dict(t=np.array(t_arr), pe=np.array(pe), om=np.array(om),
-                ow=np.array(ow), phase=np.array(ph), dyn=dyn, cfg=cfg)
+                ow=np.array(ow), phase=np.array(ph), dyn=dyn, cfg=cfg,
+                h_est=h_est, rw_health=np.asarray(dyn.rw_health, dtype=float))
 
 
 def settling_time(t, pe, threshold=1.0, hold=30.0):
