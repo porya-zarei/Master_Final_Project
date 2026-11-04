@@ -1084,3 +1084,48 @@ RL's remaining credible route over bang-bang is not speed but **robustness**: th
 switching law assumed here has no margin against inertia error, actuator nonlinearity
 or disturbances, and it ignores the allocator's fault inversion. That is where M3/M4
 should be aimed.
+
+---
+
+## §14 — L3: the LQR is robust to ±20 % inertia error; the lever is CLOSED (2026-10-16)
+
+The plant uses `J*(1+delta)` on every principal axis; the controller always uses the
+**nominal** J (an onboard model never knows the true inertia). n = 6 per factor,
+paired ICs, T = 900 s.
+
+| J scale | median t_first | median final | success (30 s hold) |
+|---|---|---|---|
+| 0.80 | 61.3 s | 0.10° | **100 %** |
+| 0.90 | 65.7 s | 0.11° | **100 %** |
+| 1.00 | 69.7 s | 0.13° | **100 %** |
+| 1.10 | 73.4 s | 0.22° | **100 %** |
+| 1.20 | 77.1 s | 0.21° | **100 %** |
+
+Degradation spans **0.88x to 1.11x** on `t_first` and stays inside 1° at every factor.
+
+### Verdict: L3 is CLOSED
+
+A ±20 % inertia mismatch — the realistic uncertainty for a 24U CubeSat — costs the
+LQR **11 % at worst** and never loses the pointing criterion. There is no meaningful
+degradation for a learned policy to recover, so **domain randomization has nothing to
+win here.** Claiming an RL win on this lever would require a mismatch so large it is
+no longer a credible model of the spacecraft.
+
+This is a negative result and it is reported as such. Of the four levers in the plan:
+
+| lever | verdict |
+|---|---|
+| L1 unknown fault | **CLOSED** (§11) — estimator extracts what the oracle provided |
+| L3 plant uncertainty | **CLOSED** (§14) — LQR robust to ±20 % |
+| L4 time-optimal | **LIVE** (§12–13) — 2.71x measured, near the provable bound |
+| L2 actuator nonlinearity | **UNTESTED** — the only remaining unknown |
+
+### What this means
+
+The thesis's only route to an RL win is **L4 (speed)**, and a one-line switching law
+already captures 2.71x of it. A policy must therefore beat **24.8 s** to be worth
+anything on speed. The alternative unexplored lever is **L2**: friction, stiction,
+deadzone and torque-rate limits are known to provoke limit cycles and stick-slip in
+linear controllers, and an RL policy trained with them can avoid them by construction.
+That is now the only unmeasured advantage and the recommended next experiment -- but
+it requires implementing the actuator model first, and it must be pre-registered.

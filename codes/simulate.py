@@ -49,19 +49,26 @@ def make_ic_bias(seed, cfg=None):
 
 def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
                 ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05,
-                fault_at=None, health_source="true"):
+                fault_at=None, health_source="true", plant_cfg=None):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
     rng = np.random.default_rng(seed)
-    dyn = SpacecraftDynamics(cfg, rng)
+    # L3/M4: the PLANT may differ from the controller's MODEL. When plant_cfg is
+    # given it builds the dynamics only; the controller always uses the NOMINAL
+    # inertia from cfg. That separation is the entire point of a mismatch test --
+    # building both from the perturbed config would model a perfectly informed
+    # controller and measure nothing.
+    dyn = SpacecraftDynamics(plant_cfg if plant_cfg is not None else cfg, rng)
+    _I = cfg["satellite"]["inertia"]
+    J_nom = np.diag([_I["Jxx"], _I["Jyy"], _I["Jzz"]])
     sensors = SensorSuite(cfg, rng)
     est = MEKF(cfg)
     if controller == "scheduled":
         from satellite_adcs.gain_scheduled import ScheduledLQRController
-        ctrl = ScheduledLQRController(cfg, dyn.J, dyn.mu, dyn.a, rng, eps=sched_eps)
+        ctrl = ScheduledLQRController(cfg, J_nom, dyn.mu, dyn.a, rng, eps=sched_eps)
     else:
-        ctrl = ADCSController(cfg, dyn.J, dyn.mu, dyn.a, rng)
+        ctrl = ADCSController(cfg, J_nom, dyn.mu, dyn.a, rng)
     ctrl.momentum_mgmt = momentum_mgmt
     if ic is not None:
         dyn.reset(q=np.asarray(ic[0], float), omega=np.asarray(ic[1], float))
