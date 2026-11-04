@@ -30,6 +30,7 @@ from ..sensors import SensorSuite
 from ..estimation import MEKF
 from ..guidance import NadirGuidance
 from ..controllers import allocate_torque
+from ..health_estimation import WheelHealthEstimator
 from ..quaternion import quat_error, theta_vec, quat_to_dcm
 
 
@@ -38,7 +39,7 @@ class ADCSEnv(gym.Env):
 
     def __init__(self, cfg=None, fault_mode=None, health_range=None,
                  control_hz=None, episode_time=None, tau_scale=None, seed=None,
-                 overrides=None):
+                 health_source=None, overrides=None):
         self.cfg = cfg if cfg is not None else load_config(overrides)
         sim = self.cfg["simulation"]
         rl = self.cfg.get("rl", {}) or {}
@@ -72,8 +73,17 @@ class ADCSEnv(gym.Env):
         self.n_rw = rw["count"]
         self.mtq_max_dipole = self.cfg["actuators"]["magnetorquers"]["max_dipole_Am2"]
 
+        # M1 (D-C2h-1a): wheel-health estimator. Only used when
+        # health_source == "hat"; with "true" the oracle allocator is untouched.
+        self.health_est = WheelHealthEstimator(rw_J=self.rw_J,
+                                              control_period=self.control_period)
+        self._last_tau_cmd = np.zeros(self.n_rw, dtype=float)
+
         self.fault_mode = fault_mode
         self.health_range = health_range
+        self.health_source = str(
+            health_source if health_source is not None
+            else rl.get("health_source", "true")).lower()
 
         # -- reward shaping (config-driven) -------------------------------------
         self.reward_shape = str(rl.get("reward_shape", "bonus")).lower()
@@ -164,6 +174,11 @@ class ADCSEnv(gym.Env):
         # which draws a fresh bias per episode. It also silently carried a bias
         # estimate across resets that never re-derived it.
         self.est.reset()
+        # M1: fresh episode = fresh health estimate (see the C2-e note above --
+        # estimator state must never leak across episodes).
+        self.health_est.reset()
+        self.health_est.prime(self.dyn.omega_w)
+        self._last_tau_cmd = np.zeros(self.n_rw, dtype=float)
         meas = self.sensors.measure(self.dyn)
         self.est.update(meas, self.dyn)
         self._last_gyro = meas["gyro"]
@@ -173,9 +188,18 @@ class ADCSEnv(gym.Env):
     def step(self, action):
         a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
         tau_des = a * self.tau_scale * self.rw_max_torque
+        # M1 (D-C2h-1a): allocate from an ESTIMATE when configured. The estimate
+        # is updated from the PREVIOUS commanded torque and the measured wheel
+        # speed, i.e. only quantities a real spacecraft has.
+        h_alloc = None
+        if self.health_source == "hat":
+            self.health_est.update(self._last_tau_cmd, self.dyn.omega_w)
+            h_alloc = self.health_est.h.copy()
         tau_cmd, m = allocate_torque(tau_des, self.dyn, self.rw_max_torque,
                                      self.mtq_max_dipole, self.rw_J,
-                                     k_desat=0.02, momentum_mgmt=True)
+                                     k_desat=0.02, momentum_mgmt=True,
+                                     health=h_alloc)
+        self._last_tau_cmd = np.asarray(tau_cmd, dtype=float).copy()
 
         meas = self.sensors.measure(self.dyn)
         self.est.update(meas, self.dyn)

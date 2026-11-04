@@ -22,7 +22,7 @@ def design_lqr(J: np.ndarray, Q: np.ndarray, R: np.ndarray):
 
 
 def allocate_torque(tau_des, dyn, rw_max_torque, mtq_max_dipole, rw_J,
-                    k_desat=0.02, momentum_mgmt=True):
+                    k_desat=0.02, momentum_mgmt=True, health=None):
     """Fault-tolerant control allocation (shared by LQR controller and RL env).
 
     1. RW: invert health so a degraded wheel still delivers tau_des
@@ -30,9 +30,16 @@ def allocate_torque(tau_des, dyn, rw_max_torque, mtq_max_dipole, rw_J,
     2. MTQ: provide the residual torque the wheels cannot deliver
        (torque = m x B -> only the component perpendicular to B is achievable).
     3. MTQ also dumps accumulated wheel momentum (desaturation).
+
+    `health=None` (default) uses the plant's TRUE wheel health -- the oracle
+    behaviour every earlier result was produced with, kept bit-identical so no
+    existing caller changes. Passing an array instead allocates from an ESTIMATE,
+    which is the realistic case (a spacecraft does not know h): the residual is
+    then computed against that same belief, so the MTQ is asked to cover what the
+    controller believes is missing rather than what is physically missing.
     """
     import numpy as _np
-    health = _np.asarray(dyn.rw_health, dtype=float)
+    health = _np.asarray(dyn.rw_health if health is None else health, dtype=float)
     tau_des = _np.asarray(tau_des, dtype=float)
     tau_cmd = _np.where(health > 1e-6, tau_des / _np.maximum(health, 1e-6), 0.0)
     tau_cmd = _np.clip(tau_cmd, -rw_max_torque, rw_max_torque)
@@ -54,6 +61,11 @@ class ADCSController:
     def __init__(self, cfg: dict, J: np.ndarray, mu: float, a: float, rng):
         self.cfg = cfg
         self.rng = rng
+        # M1 (D-C2h-1a): "true" = oracle allocator (historical default, kept so
+        # every earlier number reproduces); "hat" = allocate from self.health_hat,
+        # the realistic case where the fault is unknown. Set by the caller.
+        self.health_source = "true"
+        self.health_hat = None
         sim = cfg["simulation"]
         rw = cfg["actuators"]["reaction_wheels"]
         mtq = cfg["actuators"]["magnetorquers"]
@@ -124,6 +136,10 @@ class ADCSController:
         return self._allocate(tau_des, dyn)
 
     def _allocate(self, tau_des, dyn):
+        # M1 (D-C2h-1a): allocate from the ESTIMATE when configured, from ground
+        # truth otherwise. With "true" (the default) health=None reaches
+        # allocate_torque and the path is bit-identical to every earlier run.
+        h = self.health_hat if self.health_source == "hat" else None
         return allocate_torque(tau_des, dyn, self.rw_max_torque, self.mtq_max_dipole,
                                self.rw_J, k_desat=self.k_desat,
-                               momentum_mgmt=self.momentum_mgmt)
+                               momentum_mgmt=self.momentum_mgmt, health=h)
