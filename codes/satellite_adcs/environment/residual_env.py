@@ -25,7 +25,7 @@ from ..controllers import design_lqr
 class ResidualADCSEnv(gym.Wrapper):
     """LQR + bounded learned residual."""
 
-    def __init__(self, env, alpha=0.2, q_diag=None, r_scale=1e-4,
+    def __init__(self, env, alpha=0.2, q_diag=None, r_scale=1.0 / 0.010 ** 2,
                  use_prev_action=True):
         super().__init__(env)
         self.alpha = float(alpha)

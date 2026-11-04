@@ -66,6 +66,23 @@ def test_residual_actually_does_something():
     print(f"  non-zero residual changes the command by {d:.3f} (normalised)  OK")
 
 
+def test_gain_matches_the_classical_controller():
+    """The wrapper's nominal LQR must BE the thesis LQR, not a re-tuned one.
+
+    This is the invariant whose absence produced a 1e8x-wrong R and an evaluation
+    that "proved" the LQR was unaffected by friction. Self-consistency is not
+    enough: the gain must equal the one the classical baseline actually uses.
+    """
+    from satellite_adcs.controllers import ADCSController
+    env = _mk(0)
+    w = ResidualADCSEnv(env, alpha=0.2)
+    d = env.unwrapped.dyn
+    ctrl = ADCSController(env.cfg, d.J, d.mu, d.a, np.random.default_rng(0))
+    assert np.allclose(w.K, ctrl.K), \
+        "residual wrapper's LQR gain differs from the classical controller's"
+    print("  wrapper gain == classical controller gain (same Q, R)  OK")
+
+
 if __name__ == "__main__":
     print("Milestone D: residual RL wrapper tests")
     n = 0
