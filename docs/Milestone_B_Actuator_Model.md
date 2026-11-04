@@ -198,3 +198,66 @@ makes the claim honest and defensible.
 **This is the measured justification for residual RL:** a physical actuator effect, at
 a plausible magnitude, destroys the mission requirement for the classical controller —
 and leaves a structured, learnable error.
+
+---
+
+## 8. Milestone D2 — residual SAC result: DISADVANTAGE (and why)
+
+Residual SAC, 3 seeds, 150k steps, alpha = 0.2, trained on the Coulomb plant
+(2e-4 N·m). Paired evaluation, n = 12, LQR arm produced by the same harness with
+residual = 0 (validated: 1.578° matches C2's 1.602°).
+
+| condition | controller | success | median final |
+|---|---|---|---|
+| ideal (no friction) | **LQR** | **100 %** | **0.147°** |
+| ideal | seed 0 | 0 % | 6.051° |
+| ideal | seed 1 | 0 % | 8.501° |
+| ideal | seed 2 | 0 % | 5.870° |
+| Coulomb 2e-4 | **LQR** | 0 % | **1.578°** |
+| Coulomb 2e-4 | seed 0 | 0 % | 7.486° |
+| Coulomb 2e-4 | seed 1 | 0 % | 6.635° |
+| Coulomb 2e-4 | seed 2 | 0 % | 6.388° |
+
+### Classification (directive section 15): RL DISADVANTAGE
+
+The residual policy is **4-5x worse than the LQR in both conditions**, including the
+one it was trained on. Experiment 1 (nominal non-degradation) fails outright. The
+architecture is not exonerated by the friction result -- there is no friction result
+to be exonerated.
+
+### Diagnosis — two causes, both identified rather than guessed
+
+**1. The reward is flat exactly where the task lives.** With `reward = -theta^2`
+(theta in radians) and a +1/step bonus only below 1 deg:
+
+- at 1.6° (the LQR's parked error): theta^2 = 7.8e-4 per step
+- at 0.9° (the requirement): theta^2 = 2.5e-4 per step
+- difference: **5.3e-4 per step, ~2.4 total per episode**
+
+Against acquisition-phase costs of order -1400, that is **noise**. And the +1/step
+bonus is a cliff that cannot be reached incrementally from 1.6°. So the policy has
+**no incentive to close the 1.6° -> 0.9° gap**, which is the entire objective.
+This is the same lesson as C4.2 (where the log-shaped reward was the only arm that
+worked on the worst fault): the shaping must be normalised by the tolerance.
+
+**2. The training budget is far too small for the episode length.** 150k steps at
+4500 steps/episode is **~33 episodes of experience**. SAC cannot learn a residual
+control law from 33 episodes. This is a budget error, not an algorithmic one.
+
+### What this does and does not show
+
+- It does **not** show that residual RL cannot fix the friction offset. The task was
+  never given a usable gradient, so the experiment did not test the hypothesis.
+- It **does** show that the current reward and budget are inadequate, with the
+  mechanism identified.
+
+### Next (D3), in order
+
+1. Normalise the angle by the tolerance in the reward: `-(theta/theta_tol)^2`, which
+   is 2.56 at 1.6° and 0.81 at 0.9° -- a gradient of 1.75/step (~7900/episode),
+   i.e. ~3000x stronger in the band that matters. (Or reuse the C4.2 `log` shape.)
+2. Train on a **friction distribution including zero**, so Experiment 1 can pass:
+   0, 1e-4, 2e-4, 3e-4. A policy trained only on friction must fail on the ideal
+   plant, and it did.
+3. Raise the budget to >= 1M steps; report >= 3 seeds.
+4. Only then re-run Experiment 1 (gate) and Experiment 2 (friction).
