@@ -84,6 +84,12 @@ class ADCSEnv(gym.Env):
         self.health_source = str(
             health_source if health_source is not None
             else rl.get("health_source", "true")).lower()
+        # D4: per-episode Coulomb-friction randomisation. None keeps a fixed plant
+        # (every historical result is therefore unchanged). When set, each episode
+        # draws rw_c_coul ~ U(lo, hi), which is what lets a policy learn "apply no
+        # correction when there is no friction" -- the only way Experiment 1 can pass.
+        _fr = rl.get("friction_range", None)
+        self.friction_range = tuple(float(v) for v in _fr) if _fr else None
 
         # -- reward shaping (config-driven) -------------------------------------
         self.reward_shape = str(rl.get("reward_shape", "bonus")).lower()
@@ -184,6 +190,9 @@ class ADCSEnv(gym.Env):
         self.est.reset()
         # M1: fresh episode = fresh health estimate (see the C2-e note above --
         # estimator state must never leak across episodes).
+        if self.friction_range is not None:
+            lo, hi = self.friction_range
+            self.dyn.rw_c_coul = float(self.rng.uniform(lo, hi))
         self.health_est.reset()
         self.health_est.prime(self.dyn.omega_w)
         self._last_tau_cmd = np.zeros(self.n_rw, dtype=float)

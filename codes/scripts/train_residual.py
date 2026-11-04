@@ -24,10 +24,12 @@ from satellite_adcs.config import load_config
 
 
 def make_env(seed, coulomb, alpha, episode_time, control_hz,
-             reward_shape="tol_norm"):
+             reward_shape="tol_norm", friction_max=None):
     overrides = {"actuators": {"reaction_wheels": {
         "friction_coulomb_Nm": float(coulomb)}},
         "rl": {"reward_shape": reward_shape}}
+    if friction_max is not None:
+        overrides["rl"]["friction_range"] = [0.0, float(friction_max)]
     base = ADCSEnv(fault_mode="none", episode_time=episode_time,
                    control_hz=control_hz, seed=seed, overrides=overrides)
     return ResidualADCSEnv(base, alpha=alpha)
@@ -40,6 +42,8 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--coulomb", type=float, default=2e-4)
     p.add_argument("--alpha", type=float, default=0.2)
+    p.add_argument("--friction_max", type=float, default=None,
+                   help="if set, randomise Coulomb friction per episode in [0, max]")
     p.add_argument("--reward_shape", default="tol_norm",
                    choices=["quad", "log", "bonus", "tol_norm"])
     p.add_argument("--episode_time", type=float, default=900.0)
@@ -50,7 +54,7 @@ def main():
 
     os.makedirs(a.out, exist_ok=True)
     env = make_env(a.seed, a.coulomb, a.alpha, a.episode_time, a.control_hz,
-                   reward_shape=a.reward_shape)
+                   reward_shape=a.reward_shape, friction_max=a.friction_max)
 
     cfg = {"seed": a.seed, "coulomb": a.coulomb, "alpha": a.alpha,
            "steps": a.steps, "algo": a.algo, "control_hz": a.control_hz,
