@@ -138,7 +138,15 @@ class ADCSEnv(gym.Env):
         theta2 = float(theta @ theta)
         rate2 = float(omega_err @ omega_err)
         ctrl2 = float(a @ a)
-        if self.reward_shape == "log":
+        if self.reward_shape == "tol_norm":
+            # D3: normalise by the TOLERANCE, not by raw radians.
+            # (theta/theta_tol)^2 is 2.56 at 1.6 deg and 0.81 at 0.9 deg, so the
+            # gradient in the band where the LQR parks is ~1.75/step (~7900 per
+            # episode) instead of ~5e-4/step (~2.4) -- about 3000x stronger, and
+            # exactly where the task is decided. Raw theta^2 is noise there.
+            eps = max(self.reward_tol_rad ** 2, 1e-12)
+            r_err = -self.w_theta * float(theta2 / eps)
+        elif self.reward_shape == "log":
             eps = max(self.reward_tol_rad ** 2, 1e-12)
             r_err = -float(np.log1p(theta2 / eps))
         else:                                              # "quad" | "bonus"
