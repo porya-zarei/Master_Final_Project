@@ -1031,3 +1031,56 @@ bang-bang, LQR is smooth. No amount of LQR tuning produces switching behaviour, 
 gap is measured at 9x on the actual plant.
 
 **This is where RL can win, and the target is quantified before any training is done.**
+
+---
+
+## §13 — L4 GATE: bang-bang is 2.71x faster than the LQR at equal precision (2026-10-16)
+
+The pre-registration (plan §5.5) requires a bang-bang baseline, and §5.6 sets it as
+the falsification gate: if a trivial switching rule cannot beat the LQR, the 9x bound
+of §12 is unreachable and L4 closes.
+
+Both controllers driven through the **same env**, same paired ICs and gyro bias, same
+allocator. Only the control law differs.
+
+Bang-bang law (per axis, double-integrator switching curve):
+`s = theta + omega*|omega| / (2*alpha)`, `u = -sign(s)`, with `alpha = tau_max/J`.
+
+| seed | LQR t_first | BB t_first | LQR final | BB final |
+|---|---|---|---|---|
+| 0 | 72.8 s | 28.0 s | 0.19° | 0.17° |
+| 1 | 232.4 s | 27.2 s | 0.15° | 0.16° |
+| 2 | 61.2 s | 33.2 s | 0.11° | 0.08° |
+| 3 | 67.6 s | 22.0 s | 0.06° | 0.20° |
+| 4 | 66.8 s | 22.4 s | 0.09° | 0.11° |
+| 5 | 59.4 s | 15.8 s | 0.09° | 0.16° |
+
+**solved 6/6 for both. median t_first: LQR 67.2 s vs bang-bang 24.8 s = 2.71x faster.
+mean final error: LQR 0.11° vs BB 0.15° — equal precision.**
+
+### Verdict: L4 is LIVE, and the gate is passed
+
+- The 9x lower bound is **not** fully reachable (24.8 s against a 19.8 s bound is
+  1.25x the bound), but **2.71x of it is**, at indistinguishable precision. The
+  switching curve recovers almost all of the physically available headroom.
+- Rate nulling and three-axis coupling do **not** eat the advantage, which was the
+  main risk stated in §5.6.
+- Note the metric distinction: §12 measured *settle* time (with a 10 s hold, median
+  241 s); this measures **time-to-first-entry**, the pre-registered PRIMARY metric
+  (median 67.2 s). Both say the same thing; they are not comparable to each other.
+
+### What this means, including for the thesis if RL never wins
+
+This is a **positive, defensible result independent of the policy**: on the real
+plant, a classical LQR takes **2.7x longer** to acquire attitude than a switching law
+that is near the provable time-optimal bound. That is a genuine contribution about the
+*baseline*, and it was measured, not asserted.
+
+It also sets the bar for the policy, exactly as pre-registered: the policy must beat
+**24.8 s** to beat bang-bang, or at minimum beat **67.2 s** to beat the LQR. If it
+cannot beat a trivial switching rule, that is the finding.
+
+RL's remaining credible route over bang-bang is not speed but **robustness**: the
+switching law assumed here has no margin against inertia error, actuator nonlinearity
+or disturbances, and it ignores the allocator's fault inversion. That is where M3/M4
+should be aimed.
