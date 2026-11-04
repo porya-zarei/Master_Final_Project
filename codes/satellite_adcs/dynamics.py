@@ -46,6 +46,21 @@ class SpacecraftDynamics:
         # reaction-wheel health fault: tau_actual = health * tau_command (1.0 = healthy)
         self.rw_health = np.ones(self.n_rw)
 
+        # ---- MILESTONE B: actuator nonlinearities -------------------------
+        # ALL DEFAULT TO ZERO, so the ideal actuator (and every historical
+        # result) is bit-identical unless a config explicitly enables an effect.
+        #   deadzone_Nm           breakaway: |tau| below this delivers nothing
+        #   friction_viscous_Nms  bearing drag proportional to wheel speed
+        #   friction_coulomb_Nm   speed-independent bearing drag at breakaway
+        #   rate_limit_Nm_per_s   the drive cannot slew its torque instantly
+        #   quant_step_Nm         DAC / current-loop resolution
+        self.rw_deadzone = float(rw.get("deadzone_Nm", 0.0))
+        self.rw_b_visc = float(rw.get("friction_viscous_Nms", 0.0))
+        self.rw_c_coul = float(rw.get("friction_coulomb_Nm", 0.0))
+        self.rw_rate_limit = float(rw.get("rate_limit_Nm_per_s", 0.0))
+        self.rw_quant = float(rw.get("quant_step_Nm", 0.0))
+        self._tau_prev = np.zeros(self.n_rw)
+
         # magnetorquers
         mtq = cfg["actuators"]["magnetorquers"]
         self.mtq_axes = np.array(mtq["axes"], dtype=float)
@@ -156,11 +171,19 @@ class SpacecraftDynamics:
         tau_mtq = np.cross(m_mtq, self.B_body)
         # actuator fault: each wheel delivers only `health` of its commanded torque
         tau_rw_eff = np.asarray(tau_rw, dtype=float) * self.rw_health
-        tau = -np.cross(w, H) + tau_rw_eff + tau_mtq + self.disturbance_torque()
+
+        # Bearing friction is INTERNAL (wheel <-> body), so it must conserve total
+        # momentum: the wheel loses tau_f and the body gains exactly -tau_f.
+        # tanh gives a smooth Coulomb law; a hard sign() would chatter inside RK4.
+        tau_f = -(self.rw_b_visc * self.omega_w
+                  + self.rw_c_coul * np.tanh(self.omega_w / 0.05))
+
+        tau = (-np.cross(w, H) + tau_rw_eff - tau_f + tau_mtq
+               + self.disturbance_torque())
         w_dot = self.J_inv @ tau
 
-        # wheel speed: motor applies -tau_rw (effective) to the wheel (momentum bookkeeping)
-        ow_dot = -tau_rw_eff / self.rw_J
+        # wheel speed: motor applies -tau_rw (effective) plus friction to the wheel
+        ow_dot = (-tau_rw_eff + tau_f) / self.rw_J
 
         rn = np.linalg.norm(self.r)
         v_dot = -self.mu * self.r / rn**3
@@ -177,9 +200,27 @@ class SpacecraftDynamics:
         self.r = x[10:13]
         self.v = x[13:16]
 
+    def _rw_command_effective(self, tau_cmd, dt):
+        """Apply the static and rate actuator effects to a commanded wheel torque.
+
+        Kept out of derivatives(): RK4 calls that 4x per step with the same
+        command, so a stateful rate limit there would be applied four times.
+        """
+        t = np.asarray(tau_cmd, float).copy()
+        if self.rw_rate_limit > 0.0:
+            dmax = self.rw_rate_limit * dt
+            t = np.clip(t, self._tau_prev - dmax, self._tau_prev + dmax)
+        if self.rw_deadzone > 0.0:
+            t = np.where(np.abs(t) < self.rw_deadzone, 0.0, t)
+        if self.rw_quant > 0.0:
+            t = np.round(t / self.rw_quant) * self.rw_quant
+        self._tau_prev = t.copy()
+        return t
+
     def step(self, dt, tau_rw, m_mtq):
         """RK4 integrate dynamics by dt."""
         tau_rw = np.asarray(tau_rw, float)
+        tau_rw = self._rw_command_effective(tau_rw, dt)
         m_mtq = np.asarray(m_mtq, float)
 
         def f(x):
