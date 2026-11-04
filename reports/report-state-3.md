@@ -879,3 +879,53 @@ The contest is now **measurable**, and its shape is what was predicted before th
 fix: parity wherever the allocator masks the fault, and an RL advantage only on the
 dead wheel. Defensible and honest — but it needs n ≥ 24 and multiple seeds before it
 is a result rather than a signal.
+
+---
+
+## §10 — n = 24: the dead-wheel advantage does NOT survive (2026-10-16)
+
+§9 was n = 8. This is the same policy, same paired harness, same conditions, at
+n = 24. **The larger sample reverses the dead-wheel conclusion**, which is exactly
+why the sample size mattered.
+
+| case | RL success h10/h30 | RL final | LQR success h10/h30 | LQR final |
+|---|---|---|---|---|
+| healthy | 100 % / 100 % | **0.27°** | 100 % / 100 % | **0.27°** |
+| RW1 @ 50 % | 100 % / 100 % | 0.29° | 100 % / 100 % | 0.27° |
+| RW1 dead | 4.2 % / 0 % | 80.02° | 0 % / 0 % | 81.96° |
+
+### What changed between n = 8 and n = 24
+
+| | n = 8 | n = 24 |
+|---|---|---|
+| dead-wheel success | 12.5 % (1/8) vs 0 % | **4.2 % (1/24) vs 0 %** |
+| dead-wheel residual gap | **27.56°** | **1.94°** |
+
+The 27.6° residual advantage was **sample luck**. At n = 24 the gap is 1.94°, and
+1/24 vs 0/24 is not significant (Fisher exact p ≈ 1.0). §9's caveats were correct
+in substance: the signal did not survive.
+
+### The finding, stated without spin
+
+1. **Healthy: exact parity.** RL 0.27° = LQR 0.27°, 100 % success both. Not
+   "close to parity" — identical to two decimal places, on identical ICs and
+   identical gyro bias.
+2. **50 % fault: parity.** RL 0.29° vs LQR 0.27°, both 100 %. As predicted, the
+   oracle allocator (G13) masks the fault, so there is no headroom.
+3. **Dead wheel: neither controller recovers.** 4.2 % (1/24) vs 0 %, with an ~80°
+   residual for both. This regime is **authority-limited**, consistent with the
+   gain-scheduled LQR sweep in §5/`4984c31` — no tuning fixes it.
+4. **No RL advantage is demonstrated on this problem.** The earlier 4x precision
+   claim was an artefact of the broken metric and the weak baseline, exactly as
+   the external audit argued.
+
+### Consequence
+
+The thesis can no longer claim that RL outperforms classical control here. The
+defensible claim is the opposite, and it is a legitimate contribution:
+**a rigorous head-to-head showing that a PPO policy matches, but does not beat, a
+tuned LQR on this task, with the apparent advantage fully explained.**
+
+If a positive-control result is required, the problem must change — the current
+one is near-linear with a strong classical solution. Candidate directions are
+listed in the plan; none should be entered without a pre-registered protocol.
