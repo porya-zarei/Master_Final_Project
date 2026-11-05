@@ -26,7 +26,7 @@ class ResidualADCSEnv(gym.Wrapper):
     """LQR + bounded learned residual."""
 
     def __init__(self, env, alpha=0.2, q_diag=None, r_scale=1.0 / 0.010 ** 2,
-                 use_prev_action=True):
+                 use_prev_action=True, gate="none", slip_threshold=1.0e-5):
         super().__init__(env)
         self.alpha = float(alpha)
         I = env.cfg["satellite"]["inertia"]
@@ -45,6 +45,18 @@ class ResidualADCSEnv(gym.Wrapper):
                                             dtype=np.float32)
         self._prev = np.zeros(3)
         self._base_obs = None
+        # ---- D5: friction gate -------------------------------------------------
+        # "none" reproduces the D4 behaviour exactly (enable always 1). "slip"
+        # gates the residual on OBSERVED friction: a wheel in a stick-slip deadband
+        # receives tau_cmd but produces less rotation than the command implies, so
+        #   tau_achieved = J_w * d(omega_w)/dt,   slip = |tau_cmd - tau_achieved|
+        # distinguishes "wheel is stuck" from "wheel is healthy". This is a
+        # physics-based switch -- the same residual health_estimation.py regresses.
+        self.gate = str(gate).lower()
+        self.slip_threshold = float(slip_threshold)
+        self._prev_om = None
+        self._prev_tau_cmd = None
+        self._gate_open = 1.0
 
     # ------------------------------------------------------------------ helpers
     def lqr_action(self, base_obs):
@@ -59,9 +71,30 @@ class ResidualADCSEnv(gym.Wrapper):
             parts.append(self._prev)
         return np.concatenate(parts).astype(np.float32)
 
+    def slip(self):
+        """Per-wheel |tau_cmd - tau_achieved| from the PREVIOUS step.
+
+        Uses the plant's own wheel inertia, so no constant is guessed here.
+        Returns None on the first step, when no wheel motion has been observed.
+        """
+        if self._prev_om is None or self._prev_tau_cmd is None:
+            return None
+        d = self.env.unwrapped.dyn
+        om = np.asarray(d.omega_w, float)
+        domega = (om - self._prev_om) / float(self.env.unwrapped.control_period)
+        return np.abs(np.asarray(self._prev_tau_cmd, float) - d.rw_J * domega)
+
+    def gate_open(self, slip):
+        if self.gate != "slip" or slip is None:
+            return 1.0
+        return float(np.any(slip > self.slip_threshold))
+
     # ------------------------------------------------------------------- gym api
     def reset(self, **kwargs):
         base, info = self.env.reset(**kwargs)
+        self._prev_om = None
+        self._prev_tau_cmd = None
+        self._gate_open = 1.0
         self._base_obs = np.asarray(base, float)
         self._prev = np.zeros(3)
         info = dict(info)
@@ -71,11 +104,20 @@ class ResidualADCSEnv(gym.Wrapper):
     def step(self, action):
         a = np.clip(np.asarray(action, float), -1.0, 1.0)
         base = self._base_obs if self._base_obs is not None else self.env._obs()
-        combined = np.clip(self.lqr_action(base) + self.alpha * a, -1.0, 1.0)
+        # the gate decision uses ONLY information available before this command
+        enable = self.gate_open(self.slip())
+        self._gate_open = enable
+        combined = np.clip(self.lqr_action(base) + enable * self.alpha * a, -1.0, 1.0)
         obs, r, term, trunc, info = self.env.step(combined)
         self._base_obs = np.asarray(obs, float)
         self._prev = a.copy()
         info = dict(info)
         info["base_obs"] = self._base_obs.copy()
         info["combined_action"] = combined.copy()
+        info["gate_open"] = self._gate_open
+        info["slip"] = self.slip()
+        # record what this command was, so the NEXT step can judge whether the wheel
+        # actually responded to it
+        self._prev_om = np.asarray(self.env.unwrapped.dyn.omega_w, float).copy()
+        self._prev_tau_cmd = np.asarray(info.get("tau_cmd", np.zeros(3)), float).copy()
         return self._obs(self._base_obs), r, term, trunc, info

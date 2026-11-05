@@ -130,3 +130,52 @@ world model. **Must not gate D or E** (standing decision).
 **D5.1 + D5.2 only**: implement the detector behind a default-OFF flag, and commit the
 pre-registration. No measurement until the threshold is written down. That keeps the
 project's rule that a criterion is never chosen after seeing the number.
+
+---
+
+## D5.1 feasibility result — the naive slip differentiator FAILS
+
+Measured before any performance run, as required. `tau_achieved = J_w * d(omega_w)/dt`
+with `J_w = 2e-4 kg m^2`, period 0.2 s, LQR-only arm (a = 0), seed 2:
+
+| plant | median slip | p95 | max | gate open @ 1e-5 |
+|---|---|---|---|---|
+| **ideal (no friction)** | **1.34e-4** | 1.46e-3 | 1.9e-2 | **100 %** |
+| Coulomb 2e-4 | 2.27e-4 | 1.28e-3 | 1.9e-2 | 100 % |
+| Coulomb 3e-4 | 3.28e-4 | 1.18e-3 | 1.9e-2 | 100 % |
+
+**Separation between a healthy wheel and the friction to be detected: 1.7x. The
+distributions overlap completely.** At any threshold that opens on Coulomb it also
+opens on ideal, i.e. the gate cannot do its job.
+
+### Root cause: the detector does not model the plant
+
+`J_w * d(omega_w)/dt` is not equal to `tau_cmd` even on a PERFECTLY healthy wheel,
+because the wheel is dynamically coupled to the body through `-omega x H_w`, and the
+finite difference over a 0.2 s period (2 substeps of 0.1 s) aliases that coupling
+into a spurious "slip". The estimator was measuring unmodelled dynamics and calling
+it friction.
+
+### Consequence
+
+The D5 design in section 11 (slot 4) is **correct in principle but wrong in
+implementation**: the discriminating quantity is not a raw torque-vs-speed
+difference, it is the *model-based* residual. That quantity already exists and has
+already been validated in this project:
+
+- `health_estimation.py` regresses `h` from commanded torque against wheel-speed
+  response using the correct model, with four guards, and was measured in C2-h:
+  `h = 0.5` identified in 1.8 s, `h = 0` in 3.2 s, healthy estimate error 0.000-0.002.
+
+**Revised D5.1:** gate on the health estimator rather than a hand-rolled difference:
+
+    enable = (1 - mean(h_hat)) > eps_gate
+
+with `eps_gate` pre-registered from the C2-h measured healthy error (0.002), i.e.
+`eps_gate = 0.05` -- 25x above the measured healthy error and 10x below the smallest
+fault (h = 0.5). This is a *measured* margin on both sides, not a tuned one.
+
+Known limitation carried forward: like the naive version, the health estimator needs
+excitation, so a wheel dead from t = 0 is unobservable (G13). The gate will therefore
+open only after a command has been issued -- which is when it is needed, but this
+must be reported as a property of the gate, not hidden.
