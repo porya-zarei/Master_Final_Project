@@ -56,9 +56,14 @@ def main():
     env = make_env(a.seed, a.coulomb, a.alpha, a.episode_time, a.control_hz,
                    reward_shape=a.reward_shape, friction_max=a.friction_max)
 
+    # Every setting that changes the learned object must travel with the weights:
+    # reward_shape and friction_range are exactly what distinguish D3 from D4, and
+    # their absence from the artifact made the runs untraceable from their own files.
     cfg = {"seed": a.seed, "coulomb": a.coulomb, "alpha": a.alpha,
            "steps": a.steps, "algo": a.algo, "control_hz": a.control_hz,
-           "episode_time": a.episode_time}
+           "episode_time": a.episode_time, "reward_shape": a.reward_shape,
+           "friction_range": ([0.0, float(a.friction_max)]
+                              if a.friction_max is not None else "fixed")}
     with open(os.path.join(a.out, "config.json"), "w") as f:
         json.dump(cfg, f, indent=2)
 
