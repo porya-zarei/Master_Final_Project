@@ -313,3 +313,57 @@ The ideal-actuator gate still fails (6.1° / 4.5° / 11.6° vs 0.115°), because
 is still confined to a single friction value. **No amount of reward shaping fixes a
 policy that has never seen a frictionless actuator.** Friction must be randomised per
 episode across 0 to 3e-4 before Experiment 1 can pass.
+
+---
+
+## 10. Milestone D4 — RESULT: the hybrid beats the LQR under friction, and pays for it nominally
+
+3 seeds x 300k steps, `reward_shape = log`, friction randomised per episode in
+[0, 3e-4], alpha = 0.2. Paired n = 12; LQR arm from the same harness (a = 0),
+validated against C2 (1.578° vs 1.602°).
+
+| condition | controller | success | median final | Fisher p vs LQR |
+|---|---|---|---|---|
+| ideal | **LQR** | **100 % (12/12)** | **0.147°** | — |
+| ideal | seed 0 | 25.0 % (3/12) | 1.839° | 0.00017 (worse) |
+| ideal | seed 1 | 58.3 % (7/12) | 0.671° | 0.019 (worse) |
+| ideal | seed 2 | 75.0 % (9/12) | 0.822° | 0.109 (n.s.) |
+| **Coulomb 2e-4** | **LQR** | **0 % (0/12)** | **1.578°** | — |
+| Coulomb 2e-4 | **seed 0** | **35.3 % (6/12)** | 1.817° | **0.0069** |
+| Coulomb 2e-4 | **seed 1** | **58.3 % (7/12)** | **0.665°** | **0.0023** |
+| Coulomb 2e-4 | **seed 2** | **66.7 % (8/12)** | **0.841°** | **0.00067** |
+
+### What this establishes
+
+**Under Coulomb friction the residual policy beats a tuned LQR, significantly, on
+every seed.** Seeds 1 and 2 reach **sub-degree median pointing (0.665°, 0.841°)** --
+inside the 1° requirement -- where the LQR achieves **0/12** and parks at 1.578°.
+The effect is large (0 % -> 35-67 %), consistent across seeds, and statistically
+solid (p = 0.0069, 0.0023, 0.00067). This is the first measured RL advantage in the
+project that is not explained away by a mis-set baseline.
+
+**Experiment 1 (the gate) does not pass.** On the ideal actuator the hybrid is worse
+than the LQR: significantly for seeds 0 and 1 (p = 0.00017, 0.019), not
+distinguishable for seed 2 (p = 0.109). So the advantage is **conditional on friction
+being present**, and it is **paid for in nominal precision**.
+
+### The honest characterisation
+
+This is a **trade-off, not a free win**: the residual corrects a physical defect the
+classical controller cannot handle, and its cost is small-signal noise where no
+correction is needed. Reporting only the Coulomb column would be exactly the
+dishonest framing the directive forbids, so both columns are reported, both with
+significance tests.
+
+### Why the nominal cost appears, and the fix worth testing (D5)
+
+A policy that must add torque to fight a deadband cannot also output exactly zero
+when the deadband vanishes; what remains is a small, largely random residual around
+the setpoint, which shows up as 0.6-1.8° instead of 0.147°.
+
+**D5: gate the residual on the error magnitude.** Apply `alpha * delta_tau` only when
+the pointing error exceeds the region where the LQR is provably stuck (about 1°,
+per Milestone C2), and force it to zero inside. This is a physics-based switch, not
+another network -- consistent with the project's standing rule that the safety layer
+stays physical. It should preserve the Coulomb gain while restoring nominal
+precision, and both can then be measured again at n >= 24.
