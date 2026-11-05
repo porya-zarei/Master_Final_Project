@@ -1,8 +1,8 @@
 # Phase C — Generalisation Week Plan
 
-**Pivot recorded:** the HIL target is **Raspberry Pi first** (was ESP32-S3). RPi runs
-Python natively, so the frozen SB3 policy can be deployed unchanged for the first
-integration; ESP32-S3 becomes the later embedded target, not the first milestone.
+**Scope recorded:** development is confined to **MIL and SIL**. **HIL is deferred
+indefinitely** -- no hardware (RPi or ESP32-S3) is part of this week, this phase, or
+any claim made from it. The thesis claims simulation levels, not hardware.
 
 **Week objective:** replace the single-point D4 result ("RL wins at Coulomb = 2e-4")
 with a **fault-space map** — one policy, trained over a randomised actuator/fault
@@ -126,17 +126,46 @@ Deliverables:
 
 ---
 
-## Phase D (revised) — RPi first
+## Phase D (revised) — MIL and SIL only
 
-| ID | deliverable |
-|---|---|
-| D.1 | policy → `policy.onnx` (ONNX Runtime on RPi, ARM64) — no framework rewrite needed |
-| D.2 | RPi runs the policy at 5 Hz, host simulates the plant; timestamps both ends |
-| D.3 | latency/jitter: mean, p95, worst case (a 5 Hz loop on RPi should be ≪ 1 ms) |
-| D.4 | HIL fault injection in the loop |
-| D.5 | *later* ESP32-S3 port as the embedded target |
+Two levels of simulation, each answering a different question. Being precise about the
+distinction is what makes the results citable.
 
-RPi is not flight-qualified either; the claim remains a **bench HIL demonstration**.
+| level | what runs | question it answers |
+|---|---|---|
+| **MIL** | controller algorithm **and** plant model in one process (Python) | is the *algorithm* correct and does it perform? |
+| **SIL** | the controller as **deployed software** (fixed-step, no RL framework), in a **separate process**, talking to the plant over a real interface | does the *software* implement it correctly, in real time, with realistic numerics? |
+
+All of Phase C is MIL. SIL begins once the algorithm is frozen at G6.
+
+### MIL milestones
+
+| ID | deliverable | pass criterion |
+|---|---|---|
+| MIL-1 | **reference specification** of the discrete-time controller: observation vector and scaling, action → desired torque, allocator, safety filter, clipping -- writable as C from the document alone | an independent implementation from the spec alone reproduces the reference |
+| MIL-2 | regression: the frozen controller reproduces the G6 reported metrics | exact match on a fixed seed set |
+| MIL-3 | plant-model integrity: the same controller under two integrator step sizes converges (step-size sensitivity) | metric change bounded and reported |
+
+### SIL milestones
+
+| ID | deliverable | pass criterion |
+|---|---|---|
+| SIL-1 | policy exported to **ONNX**; equivalence vs PyTorch on a fixed input batch | max abs difference < 1e-5 |
+| SIL-2 | loop split: plant server ↔ controller client (TCP, 5 Hz, timestamps both ends) | runs 900 s without a missed deadline |
+| SIL-3 | **numerics**: ONNX float32 vs the float64 reference | pointing degradation quantified, not assumed zero |
+| SIL-4 | **timing**: latency mean/p95/worst, and pointing performance under injected jitter | report the jitter sensitivity curve |
+| SIL-5 | **parity**: SIL vs MIL on the same seeds | difference stated with a tolerance chosen *before* the run |
+| SIL-6 | fault injection in the SIL loop (wheel dead at t = 300 s) | allocator + safety filter behave as in MIL |
+
+### Why this ordering
+
+MIL-1 (a spec complete enough to implement from) is what makes SIL meaningful: if the
+spec is ambiguous, a SIL discrepancy cannot be attributed to the software rather than
+the document. **A SIL result without MIL-1 is untraceable.**
+
+### Explicitly out of scope
+
+HIL, real actuators, real sensors, realtime operating systems, flight qualification.
 
 ---
 
@@ -154,3 +183,6 @@ RPi is not flight-qualified either; the claim remains a **bench HIL demonstratio
 3. **Test grid size**: the full 6 × 5 × 2 grid is ~60 cells × 24 episodes ≈ heavy;
    recommended is the 6-friction × 4-health subset (~24 cells) for the map, with the
    remaining axes reported as a smaller ablation.
+4. **SIL timing source**: (a) simulated clock advanced by the plant server
+   (recommended -- deterministic, reproducible) or (b) wall-clock real time (realistic
+   jitter, non-reproducible runs).
