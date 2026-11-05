@@ -179,3 +179,66 @@ Known limitation carried forward: like the naive version, the health estimator n
 excitation, so a wheel dead from t = 0 is unobservable (G13). The gate will therefore
 open only after a command has been issued -- which is when it is needed, but this
 must be reported as a property of the gate, not hidden.
+
+---
+
+## D5.1b result — the health-estimator gate is BLOCKED by an excitation limit
+
+Two defects were found, in order, both before any performance measurement.
+
+### Defect 1: the observer never ran (fixed)
+
+`health_est.update()` was called only inside `if health_source == "hat"`. Under the
+default `"true"` it was **dormant**: `n_upd = [0,0,0]` over 4500 steps, with all skip
+counters zero, i.e. the function was never entered at all. Any gate reading `h` would
+have been permanently closed for the wrong reason.
+
+Fixed: the observer now runs **every step**; `h_alloc` is still `None` unless
+`health_source == "hat"`, so allocation behaviour and every historical result are
+unchanged.
+
+### Defect 2: the excitation guard rejects 100 % of updates (NOT fixed)
+
+With the observer running:
+
+| plant | `n_upd` | `skip_excite` | `h` |
+|---|---|---|---|
+| ideal | [0,0,0] | **[4500,4500,4500]** | [1,1,1] |
+| Coulomb 2e-4 | [0,0,0] | **[4500,4500,4500]** | [1,1,1] |
+| Coulomb 3e-4 | [0,0,0] | **[4500,4500,4500]** | [1,1,1] |
+
+Every update, on every wheel, at every friction level, is rejected for insufficient
+excitation. `h` never leaves its initial value.
+
+### This is fundamental, not a tuning problem
+
+The observer needs the wheel to be commanded with enough variation to identify its
+response. But at a stick-slip deadband the commanded torque is **small by
+definition** -- that is what "stuck" means. So:
+
+    quiet LQR holding at ~1.6 deg
+      -> small commands
+      -> insufficient excitation
+      -> observer silent
+      -> gate closed
+      -> residual disabled
+      -> still stuck
+
+**An excitation-based observer cannot bootstrap itself out of the condition it is
+supposed to detect.** This is G13 (a fault unobservable without excitation) reappearing
+in closed loop, and it is the same class of result as the dead-wheel finding: the
+information is not in the data because the controller is doing exactly what it should.
+
+### Options, with a recommendation
+
+| option | what it costs | verdict |
+|---|---|---|
+| (a) deliberate dither/probe torque to keep the observer excited | directly degrades nominal precision -- the thing D5 exists to protect | self-defeating |
+| (b) model-based friction estimator: regress `tau_ach = h*tau_cmd - tau_f` per wheel (offset + gain, with the `-omega x H_w` coupling modelled) | a new estimator to derive and validate; the naive version already failed at 1.7x separation | correct but out of scope for D5 |
+| (c) accept D4's trade-off as the final result; report the gate as analysed-and-blocked | none | **recommended** |
+
+**Recommendation: (c).** D4 already carries the thesis claim (sub-degree pointing
+under friction, p <= 0.007). The gate would be an improvement, not a requirement, and
+options (a) and (b) each cost more than the benefit they buy. Recording the gate as
+*designed, implemented, and shown to be blocked by an observability limit* is a
+stronger and more honest contribution than shipping a gate that cannot open.

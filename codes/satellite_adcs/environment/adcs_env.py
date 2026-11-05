@@ -208,10 +208,12 @@ class ADCSEnv(gym.Env):
         # M1 (D-C2h-1a): allocate from an ESTIMATE when configured. The estimate
         # is updated from the PREVIOUS commanded torque and the measured wheel
         # speed, i.e. only quantities a real spacecraft has.
-        h_alloc = None
-        if self.health_source == "hat":
-            self.health_est.update(self._last_tau_cmd, self.dyn.omega_w)
-            h_alloc = self.health_est.h.copy()
+        # D5: the observer must run ALWAYS, not only when it feeds the allocator.
+        # It was previously dormant under the default health_source="true", so
+        # health_est.h simply never updated and a gate reading it could never open.
+        # Allocation behaviour is unchanged: h_alloc is still None unless "hat".
+        self.health_est.update(self._last_tau_cmd, self.dyn.omega_w)
+        h_alloc = self.health_est.h.copy() if self.health_source == "hat" else None
         tau_cmd, m = allocate_torque(tau_des, self.dyn, self.rw_max_torque,
                                      self.mtq_max_dipole, self.rw_J,
                                      k_desat=0.02, momentum_mgmt=True,
