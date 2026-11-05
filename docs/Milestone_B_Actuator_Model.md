@@ -367,3 +367,56 @@ per Milestone C2), and force it to zero inside. This is a physics-based switch, 
 another network -- consistent with the project's standing rule that the safety layer
 stays physical. It should preserve the Coulomb gain while restoring nominal
 precision, and both can then be measured again at n >= 24.
+
+---
+
+## 11. D5 design diagnostic — the error-magnitude gate is WRONG
+
+Before implementing the gate proposed in §10, the hypothesis was tested: does the
+residual act at small error, where the LQR needs none? Measured |alpha * delta_tau|
+binned by pointing error, seed 2, one episode per condition:
+
+| error band | ideal: mean \|dtau\| (% of alpha*tau_max) | Coulomb: mean \|dtau\| |
+|---|---|---|
+| 0.5 - 1.0 deg | **30 %** | **47 %** |
+| 1.0 - 2.0 deg | 28 % | 13 % |
+| 2.0 - 5.0 deg | 37 % | 28 % |
+| 5 - 200 deg | 95 % | 105 % |
+
+### The hypothesis was confirmed, and the proposed fix was falsified
+
+Confirmed: on the **ideal** plant the policy spends **~30 % of its authority at
+0.5-1 deg**, where no correction is needed. That is the source of the nominal cost.
+
+Falsified: on the **Coulomb** plant it spends **47 % at the same angles** -- because
+that is precisely where it fights the deadband and holds sub-degree pointing. **The
+identical behaviour is required under friction and harmful without it.**
+
+Therefore **an error-magnitude gate cannot separate the two cases**: closing it
+below 1 deg would remove the Coulomb benefit (the whole result of §10), and opening
+it everywhere leaves the nominal cost. The design proposed in §10 would have destroyed
+the very gain it was meant to protect -- caught by measurement, before implementation.
+
+### The correct gate: detect the friction, not the error
+
+The discriminating signal is not how large the error is, but **whether the wheel is
+actually delivering the torque it was commanded**. A wheel in a stick-slip deadband
+receives a command and produces less rotation than the command implies; a healthy
+wheel does not. That quantity is already measured in this project: the per-wheel
+regressor in `health_estimation.py` compares commanded torque against the observed
+wheel-speed response, and it identifies `h` from exactly this residual (C2-h: h = 0
+in 3.2 s once commanded).
+
+**D5: gate the residual on the estimated friction residual, not on the error.**
+
+    enable = |tau_cmd - tau_achieved| > threshold        (per wheel, from wheel speed)
+    tau_des = tau_LQR + alpha * delta_tau * enable
+
+This is a **physics-based switch**, consistent with the standing rule that the safety
+layer stays physical rather than another network. Expected outcome:
+
+- no friction -> gate closed -> pure LQR -> nominal precision restored (~0.147 deg)
+- friction present -> gate open -> residual active -> Coulomb benefit retained
+
+Both must then be re-measured at n >= 24, and the gate threshold must be
+pre-registered, not tuned after seeing the result.
