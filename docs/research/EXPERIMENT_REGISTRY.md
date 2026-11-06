@@ -48,6 +48,12 @@ Repo facts at creation: branch `residual-rl`, HEAD `c9a4aa5`, 72 tracked Python 
 | E-21 | Patch bit-identity (pre/post `simulate.py` hooks) | inline capture | `reports/m33b_parity_pre_post.json` | **VALID** — max abs diff 0.0e+00 |
 | E-22 | M3.4 RLS uncertainty audit | none (analytical + recomputation on E-20 traces) | `docs/research/M34_RLS_uncertainty_audit.md` | **ANALYTICAL** — no new experiment |
 
+## Phase B
+
+| id | experiment | script | artifact | status |
+|---|---|---|---|---|
+| E-23 | **B.0 checkpoint-reusability gate** — D4 policies: hash match, wrapper-vs-classical controller identity, 15-dim observation reconstruction, command-level equivalence over 40 perturbed states, SB3 load test | `scripts/b0_checkpoint_reuse.py` | `results/b0/b0_checkpoint_reuse.json`, `reports/b0_checkpoint_reuse.json` | **VALID** — command equivalence **0.000e+00**; hashes match; `K` identical (0.000e+00); all 3 policies load. Verdict: re-evaluable for h = 1 cells only (D-13). A *trajectory* comparison is meaningless here — the harnesses draw their own orbit/noise (7.6 km apart at t=1 s) |
+
 ## Rules
 
 - A number may be quoted only if its row here reads `VALID` or `PARTIAL` **with** the caveat.

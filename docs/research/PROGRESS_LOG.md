@@ -4,6 +4,40 @@ Short entries only: what was done, what it changed, and the commit. Detail lives
 
 ---
 
+## 2026-11-06 — B.0: D4 checkpoints ARE re-evaluable (friction cells)
+
+**Done.** `scripts/b0_checkpoint_reuse.py` — hash verification, controller identity, observation
+reconstruction, command-level equivalence, SB3 load test. Results in `results/b0/` +
+`reports/b0_checkpoint_reuse.json`.
+
+**Result**
+- **Hashes MATCH** all six files against `reports/m1_checkpoint_hashes.json`.
+- **Wrapper `K` ≡ `ADCSController.K`: 0.000e+00**; scale identical; LVLH reference identical. (M1-C's
+  mis-weighted-wrapper defect is genuinely fixed, not just declared.)
+- **Command-level equivalence: 0.000e+00 over 40 perturbed states** — the 15-dim observation rebuilt from
+  a `residual_fn` payload reproduces the classical command exactly.
+- All three D4 policies **load and predict** under the current SB3.
+
+**Two test-design corrections, both mine, both caught by measurement**
+1. A *trajectory* comparison is impossible: the two harnesses draw their own orbit anomaly and noise
+   stream, so they start 7.6 km / 8.4 m/s apart at t = 1 s. It measures the RNG, not the controller.
+   The criterion was changed to command-level equivalence and that change is recorded in **D-13**.
+2. The first state in the sweep returned `tau = [0,0,0]` from the classical path — the phase manager's
+   documented one-call zero command while it flips `detumble → pointing`. Warmed past it; the remaining
+   40 states match to zero.
+
+**Verdict: RE-EVALUATE for h = 1 cells (S0, S2).** h ≠ 1 cells must be **retrained**, because the wrapper
+adds the residual to `tau_des` *before* the allocator (health-inverted) while `run_episode` adds it to the
+**already-allocated** wheel torque. Retraining those cells is step B.1.
+
+**Reproducibility gap found:** D4's `config.json` predates the c7fa879 fix and records neither
+`reward_shape` nor `friction_range` (**Q-13**). The training configuration is only recoverable from the
+commit record: `--reward_shape log --friction_max 3e-4`.
+
+**Next:** B.1 — 5 seeds × {SAC, PPO} with the flags above, plus the classical arms.
+
+---
+
 ## 2026-11-06 — Run charter recorded; housekeeping (D-12, Q-12)
 
 **Done**

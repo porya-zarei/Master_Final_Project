@@ -1,0 +1,159 @@
+{
+  "alpha": 0.2,
+  "T": 300.0,
+  "numpy": "2.4.6",
+  "sb3": "2.9.0",
+  "torch": "2.9.1+cu128",
+  "Q1_hashes": {
+    "pass": true,
+    "files": [
+      {
+        "file": "codes/results\\residual_d4_s0\\policy.zip",
+        "status": "MATCH",
+        "sha256": "f3fc80ea6086202d",
+        "recorded": "f3fc80ea6086202d",
+        "bytes": 889537
+      },
+      {
+        "file": "codes/results\\residual_d4_s1\\policy.zip",
+        "status": "MATCH",
+        "sha256": "755e819cda9458f9",
+        "recorded": "755e819cda9458f9",
+        "bytes": 889541
+      },
+      {
+        "file": "codes/results\\residual_d4_s2\\policy.zip",
+        "status": "MATCH",
+        "sha256": "01b9152d51a069c9",
+        "recorded": "01b9152d51a069c9",
+        "bytes": 889537
+      },
+      {
+        "file": "codes/results\\residual_d4_s0\\config.json",
+        "status": "MATCH",
+        "sha256": "df763b6f884c4c7c",
+        "recorded": "df763b6f884c4c7c",
+        "bytes": 142
+      },
+      {
+        "file": "codes/results\\residual_d4_s1\\config.json",
+        "status": "MATCH",
+        "sha256": "74b0c147675b188a",
+        "recorded": "74b0c147675b188a",
+        "bytes": 142
+      },
+      {
+        "file": "codes/results\\residual_d4_s2\\config.json",
+        "status": "MATCH",
+        "sha256": "68fb4ed935f314e9",
+        "recorded": "68fb4ed935f314e9",
+        "bytes": 142
+      }
+    ]
+  },
+  "Q2_controller_identity": {
+    "max_abs_dK": 0.0,
+    "scale_wrapper": 0.01,
+    "scale_classical": 0.01,
+    "max_abs_dq_ref": 0.0,
+    "max_abs_dw_ref": 0.0,
+    "pass": true
+  },
+  "Q3_command_equivalence": {
+    "n_states": 40,
+    "max_abs_command_diff": 0.0,
+    "first_call_returns_zero": true,
+    "examples": [
+      {
+        "tau_classical": [
+          -0.003820811,
+          -0.000796004,
+          0.007641572
+        ],
+        "tau_from_obs": [
+          -0.003820811,
+          -0.000796004,
+          0.007641572
+        ],
+        "max_abs_diff": 0.0
+      },
+      {
+        "tau_classical": [
+          -0.007980261,
+          0.003381321,
+          0.007673464
+        ],
+        "tau_from_obs": [
+          -0.007980261,
+          0.003381321,
+          0.007673464
+        ],
+        "max_abs_diff": 0.0
+      },
+      {
+        "tau_classical": [
+          0.007064625,
+          -0.003234759,
+          0.002987726
+        ],
+        "tau_from_obs": [
+          0.007064625,
+          -0.003234759,
+          0.002987726
+        ],
+        "max_abs_diff": 0.0
+      }
+    ],
+    "pass": true
+  },
+  "Q3b_trajectory_diagnostic": {
+    "max_abs_diff_deg": 10.033861166291146,
+    "n": 1500,
+    "usable_as_criterion": false
+  },
+  "Q3c_residual_semantics": {
+    "identical_when": "h == 1 (friction family, S0/S2)",
+    "differs_when": "h != 1 (S3/S4/S6/S7): residual is not health-inverted in run_episode"
+  },
+  "Q4_policy_load": {
+    "s0": {
+      "loads": true,
+      "obs_space": "(15,)",
+      "action_shape": "(3,)",
+      "action_on_zero_obs": [
+        0.0773,
+        0.7995,
+        -0.8356
+      ]
+    },
+    "s1": {
+      "loads": true,
+      "obs_space": "(15,)",
+      "action_shape": "(3,)",
+      "action_on_zero_obs": [
+        0.0136,
+        0.2502,
+        -0.8454
+      ]
+    },
+    "s2": {
+      "loads": true,
+      "obs_space": "(15,)",
+      "action_shape": "(3,)",
+      "action_on_zero_obs": [
+        -0.3358,
+        0.5501,
+        0.0175
+      ]
+    }
+  },
+  "verdict": "RE-EVALUATE (friction/s0 cells only)",
+  "reasons": {
+    "hashes_match": true,
+    "wrapper_controller_identical_to_classical": true,
+    "command_equivalent_on_identical_states": true,
+    "policies_load_under_current_sb3": true,
+    "friction_cells_reusable": true,
+    "multiplicative_fault_cells_need_retrain": true
+  }
+}
