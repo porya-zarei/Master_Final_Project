@@ -19,3 +19,12 @@ gps:                                # navigation / orbit -> nadir reference
   enabled: true
   position_noise_m: 10.0
   velocity_noise_ms: 0.1
+
+tachometer:                         # C.1 reaction-wheel speed sensing. DEFAULT OFF:
+  enabled: false                    # the project has no tachometer, so every estimator
+                                    # result to date used the plant's exact omega_w. Enabling
+                                    # this turns that assumption into a measurable cost.
+  noise_std_rad_s: 0.05             # 50 mrad/s read-out noise (~0.5 rpm)
+  quant_rad_s: 5.0e-3               # encoder LSB (~1024 counts/rev at 6000 rpm full scale)
+  sample_period_s: 0.2              # 5 Hz, equal to control_hz
+  max_speed_rad_s: null             # null = use the actuator full scale (628.3 rad/s)

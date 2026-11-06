@@ -133,7 +133,7 @@ Bounded by A1: the ceiling on allocation information is 0.04–0.06 deg, so this
 
 | id | task | acceptance |
 |---|---|---|
-| C.1 | Wheel-speed sensing model (noise, quantisation, 5 Hz sampling) | default OFF; with it OFF every historical number reproduces bit-identically |
+| C.1 | Wheel-speed sensing model (noise, quantisation, 5 Hz sampling) | **DONE 2026-11-06** — `wheel_sensor.py` (clamp → quantise → noise → ZOH), 9 tests, `enabled: false` shipped. Measured: one control period of sensor error = **7.1e-5 N·m = 35 %** of the 2e-4 N·m Coulomb friction |
 | C.2 | Estimator-only harness per audit §10: synthetic → recorded traces → closed loop; calibration / validation / held-out splits | three disjoint datasets; no reuse |
 | C.3 | Candidates **E** (window LS) → **A** (`σ_v`-scaled) → **B** (innovation) | coverage is the deciding metric, *per condition* |
 | C.4 | Confidence calibration + false-healthy audit | 95 % nominal coverage inside its Wilson CI; 0 false HEALTHY on S6/S7; UNKNOWN rate reported at slew and settled |

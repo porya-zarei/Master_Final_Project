@@ -4,6 +4,41 @@ Short entries only: what was done, what it changed, and the commit. Detail lives
 
 ---
 
+## 2026-11-06 — C.1: wheel-speed sensing (default off), and how favourable the old assumption was
+
+**Done.** `satellite_adcs/wheel_sensor.py` — `TachometerModel` (clamp → quantise → noise → zero-order
+hold, in that physical order) and `make_wheel_sensor(cfg)`; `sensors.yaml` gains a `tachometer` block with
+**`enabled: false`**. `tests/test_wheel_sensor.py` (9 tests). Tests **45 → 54**.
+
+**Why it matters.** Every estimator result to date (E-15…E-20, M3.4) fed the RLS the plant's exact
+`omega_w`. The regressand is `J_w·d(omega_w)/dt` — a derivative — so wheel-speed error is amplified by
+`J_w/dt` before the estimator sees it. That was the single most favourable assumption in the
+fault-awareness chain and it was never stated as one.
+
+**Measured, not asserted:** at the shipped spec (σ = 50 mrad/s, 5 Hz, `J_w = 2e-4`), one control period
+of sensing error is worth **7.1e-5 N·m** = **35 %** of the 2e-4 N·m Coulomb friction. Same order of
+magnitude — it cannot be dismissed, and it is not dominant either.
+
+**A correction to my own first estimate.** I initially computed `J_w·σ/dt` with the *integrator* step
+(0.1 s) and told the researcher the error was "several times the friction". Measured with the estimator's
+actual time base (the 0.2 s control period) it is 0.7× → **0.35×**. The test now pins 0.2 < ratio < 2.0
+and the docstring records why the first number was wrong.
+
+**Interface facts learned by running, not by reading:**
+- `h_hat` is only populated under `health_source="hat"`; the default `"true"` path records zeros by design.
+- `friction_coulomb_Nm` is an *optional* key (`.get(..., 0.0)`): scenarios inject it, the shipped
+  `actuators.yaml` does not carry it, so reading it directly raises `KeyError`.
+- `max_speed_rad_s: null` in YAML means "use actuator full scale" — `.get()` does **not** fall back when
+  the key exists with a `None` value.
+
+**Housekeeping:** a mistyped path created `E:\Education\Master\First_Project\codes\tests\…`; the file was
+moved to the correct tree and the stray directory (one file, created by that write) removed.
+
+**Next:** C.2 — rerun the estimator validation with the tachometer ON, i.e. turn "the estimator works" into
+"the estimator works at this sensor quality, or it does not".
+
+---
+
 ## 2026-11-06 — B.1 harness + classical pass (cross-check reproduces M3.3-B exactly)
 
 **Done.** `scripts/b1_residual_vs_classical.py`: 5 conditions × {C1 oracle LQR, C2 gain-scheduled,
