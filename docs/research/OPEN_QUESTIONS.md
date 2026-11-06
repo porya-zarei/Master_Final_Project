@@ -16,7 +16,7 @@ Severity: **S1** blocks a thesis claim · **S2** degrades one · **S3** housekee
 | **Q-09** | Do the results hold on **unseen fault families** (locked wheel, ramped, intermittent, sensor)? | **S1** for "generalises", S2 otherwise | Phase D.3–D.4; held-out families reported separately | D |
 | **Q-10** | Is `SIGMA_H_MAX = 0.1` intended as absolute or relative? Source comment says "±0.1"; implementation is `std(h)/sigma_v` with implicit `sigma_v = 1 N·m` | S2 | **Researcher answer** — no data can settle intent. Recorded in the M3.4 audit §8.2 | A (now) |
 | **Q-11** | Does enabling viscous friction silently alias into `h`? The regressor has no `omega` column | S2 | Add `−omega` as a third regressor, or forbid enabling `b_visc`. **Resolvable analytically** — already true by construction | D |
-| **Q-12** | Dead configuration key `initial_speed_rad_s` (read by nothing) and `cons.prime()` called before `dyn.reset()` | S3 | Fold into the next code-touching step | any |
+| **Q-12** | ~~Dead configuration key `initial_speed_rad_s` (read by nothing) and `cons.prime()` called before `dyn.reset()`~~ | — | **RESOLVED 2026-11-06** — key honoured by `SpacecraftDynamics.reset()`; priming moved after reset; both covered by `tests/test_config_honoured.py`; default path bit-identical (0.000e+00) | — |
 
 ## Answered this session (kept for the record)
 

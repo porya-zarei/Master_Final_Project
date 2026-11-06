@@ -4,6 +4,33 @@ Short entries only: what was done, what it changed, and the commit. Detail lives
 
 ---
 
+## 2026-11-06 — Run charter recorded; housekeeping (D-12, Q-12)
+
+**Done**
+- **D-12 recorded** — authorisation for the B → C-lite → D → freeze → MIL → SIL run. **S-1** E-1 (MIL),
+  E-2 (SIL), E-3 (embedded profile, host-side only) authorised in that order after the freeze;
+  **E-4 (HIL) not authorised**. **S-2** four Phase-E answers: software-only MIL/SIL target (no real-time
+  target until HIL), HIL hardware undecided → proposal produced at the HIL gate, MIL+SIL ≈ 4 weeks,
+  **C99 core** with the Python implementation as reference oracle. **S-3** commit **and push** each step.
+  Charter filed as `docs/AGENT_RUN_PROMPT.md`; `MASTER_ROADMAP` authorisation legend updated.
+- **Q-12 resolved** — two latent defects, both fixed with the default path bit-identical:
+  - `initial_speed_rad_s` was documented in `config/actuators.yaml` and **read by nothing**; the wheels
+    always started at rest. Now honoured by `SpacecraftDynamics.reset()` (default `0.0`).
+  - `FrictionHealthEstimator.prime()` ran **before** `dyn.reset()`, so the first innovation used a
+    pre-reset wheel speed. Moved after it. Numerically harmless today (zero reference + the `tau_min`
+    guard both absorb it), latent at any non-zero initial wheel speed.
+- **Housekeeping** — `codes/README.md` rewritten to the actual layout (it claimed `simulation/` was the
+  shared MIL core and that Phase 1 was at the smoke-test gate); `requirements.txt` refreshed and
+  `bsk-rl==1.3.0` marked **LEGACY** because it pins `pytest==7.3.1` and breaks the suite on Python ≥ 3.12.
+- **Tests 29 → 32** (`tests/test_config_honoured.py`), all green. **Reproducibility guard:** the four
+  parity cases reproduce the pre-hook capture to **0.000e+00** — no default number moved.
+
+**Schedule:** on plan (Phase A + housekeeping inside week 0).
+
+**Next:** Phase B.0 — D4 checkpoint reusability.
+
+---
+
 ## 2026-11-06 — Phase A: foundation closed
 
 **Done**

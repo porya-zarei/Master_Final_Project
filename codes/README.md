@@ -3,63 +3,101 @@
 M.Sc. thesis: **Fault-Tolerant Attitude Control of Nanosatellites Using Reinforcement
 Learning: From Simulation to Hardware-in-the-Loop** (Pouria Zarei, Univ. of Tehran).
 
-This repository is organized around the three research pillars of the thesis
-(fault-randomized RL, frozen world-model MPC, adaptive world-model MPC) and the
-MIL → SIL → HIL development chain. Each phase is its own top-level package so
-results are reproducible and the 3-way comparison stays clean.
+> **Execution authority for this repository is `docs/research/MASTER_ROADMAP.md`.**
+> What may be quoted from past results is `docs/research/EXPERIMENT_REGISTRY.md`.
+> This README describes the *code layout only*.
+
+## What the code actually is
+
+The training and evaluation path is a **custom NumPy/Gymnasium plant** in
+`satellite_adcs/`, driven by YAML configuration and trained with stable-baselines3
+(PPO/SAC). It is **not** a Basilisk project: the Basilisk/`bsk_rl` prototype in
+`simulation/` is an abandoned lineage that produced none of the thesis results (see
+*Legacy* below).
 
 ## Layout
 
 ```
 codes/
-├── README.md                # this file
-├── requirements.txt
-├── venv/                    # single shared virtualenv (created on first setup)
+├── satellite_adcs/          # ★ THE PLANT AND CONTROLLERS (everything runs from here)
+│   ├── dynamics.py          #   RK4 rigid body + 3 RW + 3 MTQ, gravity gradient, friction
+│   ├── environment/
+│   │   ├── adcs_env.py      #   ADCSEnv — the RL training path (9-dim obs, 3-dim action)
+│   │   └── residual_env.py  #   ResidualADCSEnv — LQR + bounded learned residual (15 obs)
+│   ├── controllers.py       #   B-dot / LQR phase manager + allocate_torque()
+│   ├── gain_scheduled.py    #   authority-scheduled LQR baseline
+│   ├── allocation_policy.py #   state-aware allocation (UNKNOWN / HEALTHY / DEGRADED)
+│   ├── friction_estimation.py  # joint per-wheel RLS on (h, tau_f)
+│   ├── health_estimation.py #   older h-only RLS (diagnostic only)
+│   ├── estimation.py        #   6-state MEKF with gyro-bias state
+│   ├── sensors.py           #   gyro / mag / sun / star tracker / GPS (NO wheel tachometer)
+│   ├── guidance.py          #   nadir / LVLH reference
+│   ├── quaternion.py        #   conversions; quat_to_dcm returns C_BN (verified)
+│   └── config/*.yaml        #   satellite, orbit, actuators, sensors, simulation, rl
 │
-├── simulation/              # ★ SHARED SIMULATION CORE (MIL) — used by every phase
-│   ├── envs/                #   Gymnasium environments (adcs_env.py: ADCSSatellite,
-│   │                        #   make_env, FaultToleranceWrapper)
-│   ├── dynamics/            #   Basilisk dyn/fsw model selection & satellite params
-│   ├── faults/              #   fault models: RW lock, sensor bias, dropout, ...
-│   ├── scenarios/           #   mission scenarios (nadir / sun / custom target)
-│   └── configs/             #   yaml configs for env + scenarios
-│
-├── rl/                      # Phase 1 — baseline RL (fault-randomized PPO / SAC)
-│   └── train_ppo.py
-├── baselines/               # classical controllers for comparison (PID / LQR / adaptive)
-├── world_models/            # Phase 2 — JEPA-style latent world model (offline, frozen)
-├── mpc/                     # MPC planners used on top of world models
-├── adaptive/                # Phase 3 — AdaJEPA-style test-time adaptation + safety gate
-├── sil/                     # Phase 4a — model compression (quantization/pruning) + SIL
-├── hil/                     # Phase 4b — hardware-in-the-loop, embedded (ARM/FPGA) deploy
-│
-├── evaluation/              # metrics + the "unseen-fault generalization" test harness
-├── utils/                   # logging, plotting, replay buffers
-├── scripts/                 # entrypoints (manual_test.py, run_comparison.py, ...)
-└── tests/                   # pytest
+├── simulate.py              # classical closed loop: run_episode(), settling_time()
+├── scripts/                 # one script per experiment (see EXPERIMENT_REGISTRY.md)
+├── tests/                   # pytest — must stay green
+├── sil/                     # E-2 SIL: split loop over TCP (placeholder)
+├── hil/                     # E-4 HIL: NOT AUTHORISED — placeholder only
+├── results/                 # GITIGNORED experiment artifacts (evidence, not code)
+└── simulation/              # ⚠ LEGACY — see below, do not import
 ```
+
+## Legacy — `simulation/` and `bsk-rl` (do not use, do not delete)
+
+`simulation/` is the abandoned Basilisk/`bsk_rl` prototype from the project's first
+weeks. It contains a **second file named `adcs_env.py`** that shares no physics code with
+the real one; its own docstring says it was never verified end to end, and it produced no
+thesis number. It is retained for provenance and must not be imported, edited or described
+as "the simulation core". `bsk-rl==1.3.0` also pins `pytest==7.3.1`, which breaks the suite
+on Python ≥ 3.12 — see `requirements.txt`.
 
 ## Setup
 
 ```bash
 cd codes
 python -m venv venv
-# Windows:  venv\Scripts\activate     (bash/git-bash: source venv/Scripts/activate)
-pip install -r requirements.txt
+# Windows PowerShell:  .\venv\Scripts\Activate.ps1
+# git-bash:            source venv/Scripts/activate
+python -m pip install -r requirements.txt     # pytest must be >= 8.3
 ```
 
-First run needs internet: Basilisk downloads support data (ephemeris + gravity
-model) on first use and caches it under `~/.cache/bsk_support_data`.
+No internet and no support-data download are needed: the plant is self-contained
+(gravity gradient only; the aero / SRP / residual-dipole flags are unimplemented no-ops).
 
-## Try this first (Phase 1 smoke test)
+## Verify in one minute
 
 ```bash
-python scripts/manual_test.py
+cd codes
+python -m pytest tests -q                    # must be green
+python simulate.py --seed 0 --T 600          # classical closed loop, prints pointing error
 ```
 
-Confirms the env + fault injection run end-to-end before you spend time on PPO.
+## Reproduce a headline result
 
-## Phase status
+The allocation grid (8 scenarios × 3 arms × 24 seeds = 576 episodes, ≈13 min):
 
-- **Phase 1 (rl):** in progress — env written, smoke test is the next gate.
-- **Phases 2–4:** scaffolding only.
+```bash
+cd codes
+python scripts/m33b_state_aware_allocation.py --n 24 --procs 4
+# writes results/m33b/ and regenerates docs/research/M33B_allocation_report.md
+```
+
+Process pools need `OMP_NUM_THREADS=1` (pinned in-script): unpinned workers exhaust memory
+at spawn on a 16 GB machine and die with `OpenBLAS error: Memory allocation still failed`,
+which looks like a code fault and is not one.
+
+## Where the evidence lives
+
+- `codes/results/**` — raw artifacts, **gitignored**. Back these up: the trained policies
+  exist only there. Checkpoint SHA-256 lives in `reports/*_hashes.json`.
+- `reports/*.json` — compact *tracked* copies of each experiment's numbers.
+- `docs/research/` — `MASTER_ROADMAP`, `DECISIONS`, `EXPERIMENT_REGISTRY`,
+  `OPEN_QUESTIONS`, `PROGRESS_LOG`, plus per-milestone reports and the RLS audit.
+
+## Status
+
+Phase A closed (2026-11-06). Phase B (residual RL vs LQR + oracle allocation) in
+progress. E-1 MIL and E-2 SIL are authorised after the architecture freeze; **E-4 HIL is
+not authorised** and no hardware or real-time claim may be made before it runs.

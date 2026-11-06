@@ -59,6 +59,10 @@ class SpacecraftDynamics:
         self.rw_c_coul = float(rw.get("friction_coulomb_Nm", 0.0))
         self.rw_rate_limit = float(rw.get("rate_limit_Nm_per_s", 0.0))
         self.rw_quant = float(rw.get("quant_step_Nm", 0.0))
+        # Q-12: `initial_speed_rad_s` was documented in actuators.yaml but read by
+        # nobody, so the wheels always started at rest. Honoured now; the default of
+        # 0.0 keeps every historical result bit-identical.
+        self.rw_init_speed = float(rw.get("initial_speed_rad_s", 0.0))
         self._tau_prev = np.zeros(self.n_rw)
 
         # magnetorquers
@@ -118,7 +122,7 @@ class SpacecraftDynamics:
             wmax = np.radians(sat["initial"]["omega_max_deg_per_s"])
             omega = self.rng.uniform(-wmax, wmax, 3)
         if omega_w is None:
-            omega_w = np.zeros(self.n_rw)
+            omega_w = np.full(self.n_rw, self.rw_init_speed)
         self.q = quat_normalize(q)
         self.omega = np.asarray(omega, float)
         self.omega_w = np.asarray(omega_w, float)

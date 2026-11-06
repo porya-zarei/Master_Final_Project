@@ -82,7 +82,6 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
         # ctrl_period is defined further below; derive the same value from `sim`
         cons = FrictionHealthEstimator(rw_J=_rwj,
                                        control_period=1.0 / float(sim["control_hz"]))
-        cons.prime(dyn.omega_w)
         ctrl.conservative_alloc = True
         ctrl.health_state = cons.state()
     if ic is not None:
@@ -100,6 +99,12 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
     # C2-e: reset the estimator properly -- see the matching note in
     # adcs_env.reset(). Poking q_hat/P alone left the gyro-bias state stale.
     est.reset()
+    # Q-12: prime the friction estimator AFTER `dyn.reset()`. Priming before it fed the
+    # estimator a PRE-reset wheel speed, so the first innovation was computed against a
+    # stale reference. Numerically harmless today (a zero reference and the tau_min guard
+    # both absorb it), but it was a latent defect for any non-zero initial wheel speed.
+    if cons is not None:
+        cons.prime(dyn.omega_w)
 
     dt = sim["dt_s"]
     # integer substeps per control period; the EFFECTIVE period is nctrl*dt, so
