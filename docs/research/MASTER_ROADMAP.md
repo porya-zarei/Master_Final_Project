@@ -21,8 +21,17 @@ Simulation to Hardware-in-the-Loop Implementation.*
 `[DONE]` executed with evidence · `[AUTH]` authorised now, may run · `[GATE]` blocking, needs a decision ·
 `[NEEDS-APPROVAL]` prepared, must not start without an explicit researcher GO · `[PLANNED]` described only
 
-**Current authorisation:** Phases **A, B, C, D are `[AUTH]`**. Phase **E is `[NEEDS-APPROVAL]`**.
-Phase **F is `[PLANNED]`** (begins once B–D evidence exists).
+**Current authorisation (updated 2026-11-06 by D-12):** Phases **A, B, C, D are `[AUTH]`**. Phase **E is
+`[AUTH]` for E-1 (MIL), E-2 (SIL) and E-3 (embedded profile, host-side only)** — in that order, and only
+after the architecture-freeze gate — while **E-4 (HIL) remains `[NEEDS-APPROVAL]`**. Phase **F is
+`[PLANNED]`**.
+
+**The four Phase-E approval questions are answered for this run (D-12 / S-2):**
+(1) MIL/SIL target = **pure software on this PC + a second process**, no real-time target until HIL;
+(2) HIL hardware **undecided** — a proposal with a bill of materials is produced at the HIL gate;
+(3) timebox **MIL + SIL ≈ 4 weeks**, HIL a later stage;
+(4) MIL-1 language = **C99 core**, no dynamic allocation, no libc beyond `math.h`, with the Python
+implementation as the reference oracle.
 
 ## Scope decision recorded this session
 
@@ -148,9 +157,12 @@ Bounded by A1: the ceiling on allocation information is 0.04–0.06 deg, so this
 
 ---
 
-## Phase E — MIL → SIL → embedded → HIL `[NEEDS-APPROVAL]`
+## Phase E — MIL → SIL → embedded → HIL
 
-**Not authorised. Nothing in this phase starts without an explicit researcher GO.** Ordering rationale:
+**Authorisation (D-12):** `[AUTH]` for **E-1 MIL**, **E-2 SIL**, **E-3 embedded profile (host-side only)**,
+in that order, and only after the architecture-freeze gate (§ Phase D). **`[NEEDS-APPROVAL]` for E-4 HIL** —
+HIL does not start without an explicit researcher GO, and no hardware, real-time or flight-readiness claim
+may be made before it exists.
 MIL-1 must precede SIL, otherwise a SIL discrepancy cannot be attributed to the software rather than the
 specification, and the result is untraceable.
 
