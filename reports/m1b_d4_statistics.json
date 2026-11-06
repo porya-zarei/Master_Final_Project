@@ -1,0 +1,91 @@
+{
+  "note": "Seed is the independent training-level unit. Episode-level analysis is secondary, within-policy evidence only.",
+  "conditions": {
+    "ideal": {
+      "lqr_success30": 100.0,
+      "seeds": [
+        {
+          "seed": "seed0",
+          "success30": 25.0,
+          "final_median": 1.8386668719960517,
+          "better_than_lqr": false
+        },
+        {
+          "seed": "seed1",
+          "success30": 58.333333333333336,
+          "final_median": 0.6709749208446416,
+          "better_than_lqr": false
+        },
+        {
+          "seed": "seed2",
+          "success30": 75.0,
+          "final_median": 0.8221205301109773,
+          "better_than_lqr": false
+        }
+      ],
+      "seed_sign_test_p": 0.25,
+      "episode_level_secondary": {
+        "seed0": {
+          "discordant_rl_only": 0,
+          "discordant_lqr_only": 9,
+          "mcnemar_p": 0.00390625
+        },
+        "seed1": {
+          "discordant_rl_only": 0,
+          "discordant_lqr_only": 5,
+          "mcnemar_p": 0.0625
+        },
+        "seed2": {
+          "discordant_rl_only": 0,
+          "discordant_lqr_only": 3,
+          "mcnemar_p": 0.25
+        }
+      }
+    },
+    "coulomb_2e4": {
+      "lqr_success30": 0.0,
+      "seeds": [
+        {
+          "seed": "seed0",
+          "success30": 35.27777777777778,
+          "final_median": 1.8166601851988124,
+          "better_than_lqr": true
+        },
+        {
+          "seed": "seed1",
+          "success30": 58.333333333333336,
+          "final_median": 0.6649324850213065,
+          "better_than_lqr": true
+        },
+        {
+          "seed": "seed2",
+          "success30": 66.66666666666666,
+          "final_median": 0.8406610663957379,
+          "better_than_lqr": true
+        }
+      ],
+      "seed_sign_test_p": 0.25,
+      "episode_level_secondary": {
+        "seed0": {
+          "discordant_rl_only": 4,
+          "discordant_lqr_only": 0,
+          "mcnemar_p": 0.125
+        },
+        "seed1": {
+          "discordant_rl_only": 7,
+          "discordant_lqr_only": 0,
+          "mcnemar_p": 0.015625
+        },
+        "seed2": {
+          "discordant_rl_only": 8,
+          "discordant_lqr_only": 0,
+          "mcnemar_p": 0.0078125
+        }
+      }
+    }
+  },
+  "multiple_comparisons": {
+    "n_tests": 6,
+    "note": "6 seed-level comparisons, uncorrected; Holm would require p < 0.0083 for the smallest."
+  }
+}

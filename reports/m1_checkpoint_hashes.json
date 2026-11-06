@@ -1,0 +1,26 @@
+{
+  "codes/results\\residual_d4_s0\\policy.zip": {
+    "sha256": "f3fc80ea6086202dc76277be5ffd124d98d4707100aef0fad18d5db699de2844",
+    "bytes": 889537
+  },
+  "codes/results\\residual_d4_s1\\policy.zip": {
+    "sha256": "755e819cda9458f9e45757c111ba5851122735de7a2f7af4fe6b600ba3a4fe8b",
+    "bytes": 889541
+  },
+  "codes/results\\residual_d4_s2\\policy.zip": {
+    "sha256": "01b9152d51a069c9f56e8e19538a6eb3fb978637f4e6e6d3a26cdc748eae95b6",
+    "bytes": 889537
+  },
+  "codes/results\\residual_d4_s0\\config.json": {
+    "sha256": "df763b6f884c4c7cc08d0a7773f3ab7eeecaa86c308b28ae6affa47973ead4d5",
+    "bytes": 142
+  },
+  "codes/results\\residual_d4_s1\\config.json": {
+    "sha256": "74b0c147675b188a6720a95c90ab01c7f7f618d15b9547eb941089e1fe31a8aa",
+    "bytes": 142
+  },
+  "codes/results\\residual_d4_s2\\config.json": {
+    "sha256": "68fb4ed935f314e97f15249a23f995737cde7c242cad91da031e06d8e2334cda",
+    "bytes": 142
+  }
+}

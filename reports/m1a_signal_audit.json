@@ -1,0 +1,117 @@
+{
+  "ideal": {
+    "coulomb": 0.0,
+    "n_steps": 4499,
+    "Jw": 0.0002,
+    "naive_D5": {
+      "median_abs": 3.6693122239068825e-05,
+      "median_abs_err_vs_true": 3.6693122239068825e-05,
+      "p90_abs_err_vs_true": 0.0001521593345945776
+    },
+    "corrected": {
+      "median_abs": 5.031375706690544e-18,
+      "median_abs_err_vs_true": 5.031375706690544e-18,
+      "p90_abs_err_vs_true": 1.3682631416767065e-17
+    },
+    "guards": {
+      "n_upd": [
+        4469,
+        2329,
+        2585
+      ],
+      "skip_excite": [
+        31,
+        2171,
+        1915
+      ],
+      "skip_sat": [
+        0,
+        0,
+        0
+      ],
+      "skip_plaus": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "coulomb_2e-4": {
+    "coulomb": 0.0002,
+    "n_steps": 4499,
+    "Jw": 0.0002,
+    "naive_D5": {
+      "median_abs": 0.00018784279182097434,
+      "median_abs_err_vs_true": 3.9838153885974866e-05,
+      "p90_abs_err_vs_true": 0.0001538141030419821
+    },
+    "corrected": {
+      "median_abs": 0.00019999999999999998,
+      "median_abs_err_vs_true": 5.204170427930421e-18,
+      "p90_abs_err_vs_true": 1.395910297075087e-17
+    },
+    "guards": {
+      "n_upd": [
+        4492,
+        4497,
+        4492
+      ],
+      "skip_excite": [
+        8,
+        3,
+        8
+      ],
+      "skip_sat": [
+        0,
+        0,
+        0
+      ],
+      "skip_plaus": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "coulomb_3e-4": {
+    "coulomb": 0.0003,
+    "n_steps": 4499,
+    "Jw": 0.0002,
+    "naive_D5": {
+      "median_abs": 0.00028664468334340325,
+      "median_abs_err_vs_true": 4.147622576931723e-05,
+      "p90_abs_err_vs_true": 0.00015477336957059283
+    },
+    "corrected": {
+      "median_abs": 0.0002999999999999999,
+      "median_abs_err_vs_true": 5.2583805365546965e-18,
+      "p90_abs_err_vs_true": 1.4040418133687282e-17
+    },
+    "guards": {
+      "n_upd": [
+        4491,
+        4497,
+        4497
+      ],
+      "skip_excite": [
+        9,
+        3,
+        3
+      ],
+      "skip_sat": [
+        0,
+        0,
+        0
+      ],
+      "skip_plaus": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "separation": {
+    "corrected": 39750559620114.85,
+    "naive_D5": 5.119291582687113
+  }
+}

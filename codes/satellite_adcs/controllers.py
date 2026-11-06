@@ -65,6 +65,12 @@ class ADCSController:
         # every earlier number reproduces); "hat" = allocate from self.health_hat,
         # the realistic case where the fault is unknown. Set by the caller.
         self.health_source = "true"
+        self.health_floor = None      # M3.1: legacy global floor (kept, default OFF)
+        # M3.3-A: state-aware conservative allocation. Default OFF -> the path below
+        # (allocate_torque with h or None) is the ONLY code executed, so every
+        # historical result stays bit-identical.
+        self.conservative_alloc = False
+        self.health_state = None      # per-wheel integer state, or None
         self.health_hat = None
         sim = cfg["simulation"]
         rw = cfg["actuators"]["reaction_wheels"]
@@ -139,7 +145,23 @@ class ADCSController:
         # M1 (D-C2h-1a): allocate from the ESTIMATE when configured, from ground
         # truth otherwise. With "true" (the default) health=None reaches
         # allocate_torque and the path is bit-identical to every earlier run.
+        if self.conservative_alloc:
+            # State-aware policy resolves h_used; the EXISTING allocator then applies
+            # it, so magnetorquer allocation (tau = m x B), desaturation and clipping
+            # all remain exactly as before. Returning a torque directly would have
+            # silently dropped the MTQ path.
+            from .allocation_policy import resolve_effectiveness
+            h_used, _eff = resolve_effectiveness(
+                self.health_hat, self.health_state, n_rw=3)
+            return allocate_torque(tau_des, dyn, self.rw_max_torque,
+                                   self.mtq_max_dipole, self.rw_J,
+                                   k_desat=self.k_desat,
+                                   momentum_mgmt=self.momentum_mgmt,
+                                   health=h_used)
         h = self.health_hat if self.health_source == "hat" else None
+        # Legacy global floor (M3.1). Default None -> skipped -> unchanged path.
+        if h is not None and self.health_floor is not None:
+            h = np.maximum(np.asarray(h, float), float(self.health_floor))
         return allocate_torque(tau_des, dyn, self.rw_max_torque, self.mtq_max_dipole,
                                self.rw_J, k_desat=self.k_desat,
                                momentum_mgmt=self.momentum_mgmt, health=h)

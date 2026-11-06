@@ -49,7 +49,9 @@ def make_ic_bias(seed, cfg=None):
 
 def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
                 ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05,
-                fault_at=None, health_source="true", plant_cfg=None):
+                fault_at=None, health_source="true", plant_cfg=None,
+                residual_fn=None, residual_alpha=0.0, health_floor=None,
+                conservative=False):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -70,6 +72,19 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
     else:
         ctrl = ADCSController(cfg, J_nom, dyn.mu, dyn.a, rng)
     ctrl.momentum_mgmt = momentum_mgmt
+    ctrl.health_floor = health_floor
+    # M3.3-B: run the REAL friction/effectiveness estimator inside the loop and let it
+    # supply the health state. Ground-truth rw_health is never passed to the controller.
+    cons = None
+    if conservative:
+        from satellite_adcs.friction_estimation import FrictionHealthEstimator
+        _rwj = float(cfg["actuators"]["reaction_wheels"]["inertia_kgm2"])
+        # ctrl_period is defined further below; derive the same value from `sim`
+        cons = FrictionHealthEstimator(rw_J=_rwj,
+                                       control_period=1.0 / float(sim["control_hz"]))
+        cons.prime(dyn.omega_w)
+        ctrl.conservative_alloc = True
+        ctrl.health_state = cons.state()
     if ic is not None:
         dyn.reset(q=np.asarray(ic[0], float), omega=np.asarray(ic[1], float))
         if gyro_bias is not None:
@@ -104,6 +119,7 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
         h_est.prime(dyn.omega_w)
         ctrl.health_source = "hat"
     prev_tau_rw = np.zeros(3, dtype=float)
+    _rw_max = float(cfg["actuators"]["reaction_wheels"]["max_torque_Nm"])
     t = 0.0
     t_arr, pe, om, ow, ph = [], [], [], [], []
     while t < T:
@@ -113,10 +129,27 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
         if h_est is not None:
             h_est.update(prev_tau_rw, dyn.omega_w)
             ctrl.health_hat = h_est.h.copy()
+        if cons is not None:
+            # estimator sees only commanded torque and measured wheel speed
+            cons.update(prev_tau_rw, dyn.omega_w)
+            ctrl.health_hat = cons.h.copy()
+            ctrl.health_state = cons.state()
         meas = sensors.measure(dyn)
         est.update(meas, dyn)                       # correct to CURRENT measurement
         tau_rw, m = ctrl.control(meas, est, dyn, t, ctrl_period)
-        if h_est is not None:
+        # M1-C remediation / M2 infrastructure: the RL residual acts INSIDE the
+        # classical loop, on the torque the phase-managed controller produced. With
+        # residual_fn=None the classical path is reproduced exactly, which is the
+        # parity M1-C showed the wrapper could not provide.
+        if residual_fn is not None:
+            _a = residual_fn(dict(meas=meas, est=est, dyn=dyn, t=t,
+                                  tau_rw=np.asarray(tau_rw, float),
+                                  phase=ctrl.phase))
+            if _a is not None:
+                tau_rw = np.clip(np.asarray(tau_rw, float)
+                                 + residual_alpha * np.clip(np.asarray(_a, float), -1.0, 1.0)
+                                 * _rw_max, -_rw_max, _rw_max)
+        if h_est is not None or cons is not None:
             prev_tau_rw = np.asarray(tau_rw, dtype=float).copy()
         # step dynamics AND propagate estimator in lockstep (same elapsed time)
         for _ in range(nctrl):
