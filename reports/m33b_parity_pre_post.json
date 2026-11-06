@@ -1,0 +1,63 @@
+{
+  "purpose": "Pre/post patch bit-identity check for the M3.3-B simulate.py hooks (health_source='unity', wheel_sensor, record, cons). Captured on the unmodified code, then re-captured after the patch.",
+  "cases": {
+    "healthy_seed0": {
+      "pre": {
+        "final": 0.19205369055585592,
+        "rms": 16.849061582958267,
+        "ow_max": 460.73618109816516,
+        "n": 4500
+      },
+      "post": {
+        "final": 0.19205369055585592,
+        "rms": 16.849061582958267,
+        "ow_max": 460.73618109816516,
+        "n": 4500
+      }
+    },
+    "coulomb_2e4_seed0": {
+      "pre": {
+        "final": 1.658170741288229,
+        "rms": 17.0417449996243,
+        "ow_max": 456.7840232915586,
+        "n": 4500
+      },
+      "post": {
+        "final": 1.658170741288229,
+        "rms": 17.0417449996243,
+        "ow_max": 456.7840232915586,
+        "n": 4500
+      }
+    },
+    "healthy_seed1": {
+      "pre": {
+        "final": 0.25005109955590715,
+        "rms": 8.426167728368405,
+        "ow_max": 311.50983480225017,
+        "n": 4500
+      },
+      "post": {
+        "final": 0.25005109955590715,
+        "rms": 8.426167728368405,
+        "ow_max": 311.50983480225017,
+        "n": 4500
+      }
+    },
+    "rw1_50_seed0": {
+      "pre": {
+        "final": 0.19121940545257904,
+        "rms": 20.341937806058276,
+        "ow_max": 471.96589785657045,
+        "n": 4500
+      },
+      "post": {
+        "final": 0.19121940545257904,
+        "rms": 20.341937806058276,
+        "ow_max": 471.96589785657045,
+        "n": 4500
+      }
+    }
+  },
+  "max_abs_diff": 0.0,
+  "verdict": "BIT-IDENTICAL"
+}

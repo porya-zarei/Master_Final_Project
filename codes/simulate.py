@@ -51,7 +51,7 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
                 ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05,
                 fault_at=None, health_source="true", plant_cfg=None,
                 residual_fn=None, residual_alpha=0.0, health_floor=None,
-                conservative=False):
+                conservative=False, wheel_sensor=None, record=False):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -118,20 +118,35 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
         h_est.reset()
         h_est.prime(dyn.omega_w)
         ctrl.health_source = "hat"
+    elif health_source == "unity":
+        # M3.3-B control arm: the allocator is told "every wheel is healthy" and is
+        # never corrected. This is the NO-FAULT-KNOWLEDGE lower bound -- what an
+        # unknown fault costs with no estimator at all. It is the arm the estimated
+        # path must beat, and the oracle path (health_source="true") must in turn
+        # beat both. Additive: "true" (default) and "hat" are untouched.
+        ctrl.health_source = "hat"
+        ctrl.health_hat = np.ones(int(ctrl.n_rw), dtype=float)
     prev_tau_rw = np.zeros(3, dtype=float)
     _rw_max = float(cfg["actuators"]["reaction_wheels"]["max_torque_Nm"])
     t = 0.0
     t_arr, pe, om, ow, ph = [], [], [], [], []
+    rec = (dict(tau=[], deliv=[], m=[], w=[], h_hat=[], state=[], sigma=[], health=[])
+           if record else None)
     while t < T:
         if fault_pending and t >= float(fault_at):
             dyn.set_rw_health(rw_health)
             fault_pending = False
+        # M3.3-B: the estimator is allowed to see a MEASURED wheel speed, not the
+        # plant state. `wheel_sensor=None` passes dyn.omega_w through unchanged, so
+        # the default path is bit-identical; any callable (noise + quantisation)
+        # is the stated sensitivity case, because the project has no tachometer.
+        _w_meas = dyn.omega_w if wheel_sensor is None else wheel_sensor(dyn.omega_w)
         if h_est is not None:
-            h_est.update(prev_tau_rw, dyn.omega_w)
+            h_est.update(prev_tau_rw, _w_meas)
             ctrl.health_hat = h_est.h.copy()
         if cons is not None:
             # estimator sees only commanded torque and measured wheel speed
-            cons.update(prev_tau_rw, dyn.omega_w)
+            cons.update(prev_tau_rw, _w_meas)
             ctrl.health_hat = cons.h.copy()
             ctrl.health_state = cons.state()
         meas = sensors.measure(dyn)
@@ -151,10 +166,32 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
                                  * _rw_max, -_rw_max, _rw_max)
         if h_est is not None or cons is not None:
             prev_tau_rw = np.asarray(tau_rw, dtype=float).copy()
+        if record:
+            # the EXECUTED wheel command and the torque the wheel actually delivered
+            _tau = np.asarray(tau_rw, dtype=float)
+            _h = np.asarray(dyn.rw_health, dtype=float)
+            rec["tau"].append(_tau.copy())
+            rec["deliv"].append(_tau * _h)
+            rec["m"].append(np.asarray(m, dtype=float).copy())
+            rec["health"].append(_h.copy())
+            if cons is not None:
+                rec["h_hat"].append(cons.h.astype(float))
+                rec["state"].append(cons.state().astype(int))
+                rec["sigma"].append(cons.sigma_h.astype(float))
+            elif h_est is not None:
+                rec["h_hat"].append(h_est.h.astype(float))
+                rec["state"].append(np.full(int(ctrl.n_rw), -1, dtype=int))
+                rec["sigma"].append(np.zeros(int(ctrl.n_rw), dtype=float))
+            else:
+                rec["h_hat"].append(np.zeros(int(ctrl.n_rw), dtype=float))
+                rec["state"].append(np.full(int(ctrl.n_rw), -1, dtype=int))
+                rec["sigma"].append(np.zeros(int(ctrl.n_rw), dtype=float))
         # step dynamics AND propagate estimator in lockstep (same elapsed time)
         for _ in range(nctrl):
             dyn.step(dt, tau_rw, m)
             est.propagate(meas["gyro"], dt)
+        if record:
+            rec["w"].append(np.asarray(dyn.omega_w, dtype=float).copy())
         t += ctrl_period
         t_arr.append(t)
         pe.append(pointing_error_deg(dyn))
@@ -164,7 +201,9 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
 
     return dict(t=np.array(t_arr), pe=np.array(pe), om=np.array(om),
                 ow=np.array(ow), phase=np.array(ph), dyn=dyn, cfg=cfg,
-                h_est=h_est, rw_health=np.asarray(dyn.rw_health, dtype=float))
+                h_est=h_est, rw_health=np.asarray(dyn.rw_health, dtype=float),
+                cons=cons,
+                rec=None if rec is None else {k: np.array(v) for k, v in rec.items()})
 
 
 def settling_time(t, pe, threshold=1.0, hold=30.0):
