@@ -149,7 +149,7 @@ Bounded by A1: the ceiling on allocation information is 0.04–0.06 deg, so this
 |---|---|---|
 | D.1 | PPO vs SAC, single-factor, 5 seeds each, identical obs/action/reward | task metrics only, never returns; one algorithm nominated with evidence |
 | D.2 | Safety supervisor + fallback classical controller | intervention rate reported; one-step model-based *performance* filter — **the word "guarantee" is prohibited** |
-| D.3 | Fault taxonomy behind flags: locked wheel, ramped degradation, intermittent, gyro-bias step, star-tracker dropout, saturation | each has a regression test; S0 reproduces bit-identically with flags off |
+| D.3 | Fault taxonomy behind flags: locked wheel, ramped degradation, intermittent, gyro-bias step, star-tracker dropout, saturation | **DONE 2026-11-06** — `fault_taxonomy.py`, 13 regression tests, flags-off reproduction **0.000e+00** |
 | D.4 | Unseen fault combinations + randomised ICs; held-out families reported separately | no test on a severity used in training |
 | D.5 | Mid-flight injection and worst-case stress | reported as distributions, never as a bare median |
 

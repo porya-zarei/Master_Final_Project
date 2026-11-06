@@ -45,6 +45,12 @@ class SpacecraftDynamics:
         self.n_rw = rw["count"]
         # reaction-wheel health fault: tau_actual = health * tau_command (1.0 = healthy)
         self.rw_health = np.ones(self.n_rw)
+        # D.3: a time-varying fault schedule, DEFAULT NONE. When it is set the plant
+        # overwrites rw_health (and the lock mask) once per integrator step; when it is
+        # None the code below is exactly what it was, so history stays bit-identical.
+        self.wheel_faults = None
+        self.rw_lock = np.zeros(self.n_rw, dtype=bool)
+        self.locked_any = False
 
         # ---- MILESTONE B: actuator nonlinearities -------------------------
         # ALL DEFAULT TO ZERO, so the ideal actuator (and every historical
@@ -184,10 +190,17 @@ class SpacecraftDynamics:
 
         tau = (-np.cross(w, H) + tau_rw_eff - tau_f + tau_mtq
                + self.disturbance_torque())
+        if self.locked_any:
+            # A jammed wheel transmits NOTHING to the structure: its command is absorbed
+            # and its bearing torque is internal. Subtracting the wheel's own
+            # contribution is exact and, with no locked wheel, this branch never runs.
+            tau = tau - np.where(self.rw_lock, tau_rw_eff - tau_f, 0.0)
         w_dot = self.J_inv @ tau
 
         # wheel speed: motor applies -tau_rw (effective) plus friction to the wheel
         ow_dot = (-tau_rw_eff + tau_f) / self.rw_J
+        if self.locked_any:
+            ow_dot = np.where(self.rw_lock, 0.0, ow_dot)
 
         rn = np.linalg.norm(self.r)
         v_dot = -self.mu * self.r / rn**3
@@ -223,6 +236,12 @@ class SpacecraftDynamics:
 
     def step(self, dt, tau_rw, m_mtq):
         """RK4 integrate dynamics by dt."""
+        # D.3: refresh the scheduled fault state once per step (not per RK4 stage, or a
+        # time-varying schedule would be applied four times inside one step).
+        if self.wheel_faults is not None:
+            self.rw_health = self.wheel_faults.health(self.t)
+            self.rw_lock = self.wheel_faults.locked(self.t)
+            self.locked_any = bool(self.rw_lock.any())
         tau_rw = np.asarray(tau_rw, float)
         tau_rw = self._rw_command_effective(tau_rw, dt)
         m_mtq = np.asarray(m_mtq, float)
@@ -250,4 +269,16 @@ class SpacecraftDynamics:
     def set_rw_health(self, health):
         """Set per-wheel health in [0,1] (fault: tau_actual = health * tau_command)."""
         self.rw_health = np.asarray(health, dtype=float)
+        return self
+
+    def set_wheel_faults(self, schedule):
+        """Attach a D.3 time-varying fault schedule (None = static health, unchanged path).
+
+        Ground truth in the plant only: controllers and estimators must never read it
+        (D-03). Passing None restores the static `rw_health` behaviour exactly.
+        """
+        self.wheel_faults = schedule
+        if schedule is None:
+            self.rw_lock = np.zeros(self.n_rw, dtype=bool)
+            self.locked_any = False
         return self

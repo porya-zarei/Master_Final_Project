@@ -51,7 +51,8 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
                 ic=None, gyro_bias=None, controller="lqr", sched_eps=0.05,
                 fault_at=None, health_source="true", plant_cfg=None,
                 residual_fn=None, residual_alpha=0.0, health_floor=None,
-                conservative=False, wheel_sensor=None, record=False):
+                conservative=False, wheel_sensor=None, record=False,
+                wheel_faults=None, sensor_faults=None):
     sim = cfg["simulation"]
     if T is None:
         T = sim["episode_duration_s"]
@@ -105,6 +106,15 @@ def run_episode(cfg, seed=0, T=None, rw_health=None, momentum_mgmt=True,
     # both absorb it), but it was a latent defect for any non-zero initial wheel speed.
     if cons is not None:
         cons.prime(dyn.omega_w)
+    # D.3: time-varying fault schedules (default None). Mutually exclusive with a static
+    # rw_health, which the schedule would silently overwrite every step.
+    if wheel_faults is not None:
+        if rw_health is not None:
+            raise ValueError("pass either rw_health (static) or wheel_faults (schedule), "
+                             "not both -- the schedule would overwrite the static value")
+        dyn.set_wheel_faults(wheel_faults)
+    if sensor_faults is not None:
+        sensors.set_faults(sensor_faults)
 
     dt = sim["dt_s"]
     # integer substeps per control period; the EFFECTIVE period is nctrl*dt, so

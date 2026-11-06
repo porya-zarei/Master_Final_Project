@@ -26,12 +26,28 @@ class SensorSuite:
             self.cfg["gyro"]["bias_rad_s"],
             self.cfg["gyro"]["bias_rad_s"],
         ]) * self.rng.normal(size=3)
+        # D.3: sensor faults (bias step, star-tracker dropout). None = none.
+        self.faults = None
 
     def set_bias(self, bias):
         """Force an explicit gyro bias (used by the paired evaluation harness so
         that RL and LQR see the SAME bias, and by tests)."""
         self.gyro_bias = np.asarray(bias, dtype=float).copy()
         return self
+
+    def set_faults(self, faults):
+        """Attach D.3 sensor faults (None = none, and the measurement path is unchanged).
+
+        `faults` is a `fault_taxonomy.SensorFaults`. Ground truth in the sensor only --
+        no consumer may read it (D-03).
+        """
+        self.faults = faults
+        return self
+
+    def _gyro_bias_at(self, t):
+        if self.faults is None:
+            return self.gyro_bias
+        return self.gyro_bias + self.faults.bias_offset(t)
 
     def measure(self, dyn):
         """Return a dict of measurements from the true state."""
@@ -41,7 +57,7 @@ class SensorSuite:
         C = dyn.C
 
         if s["gyro"]["enabled"]:
-            out["gyro"] = dyn.omega + self.gyro_bias + \
+            out["gyro"] = dyn.omega + self._gyro_bias_at(dyn.t) + \
                 rng.normal(0.0, s["gyro"]["noise_std_rad_s"], 3)
 
         if s["magnetometer"]["enabled"]:
@@ -53,8 +69,11 @@ class SensorSuite:
             out["sun"] = sun_meas / np.linalg.norm(sun_meas)
 
         if s["star_tracker"]["enabled"]:
-            dq = _small_rotation(rng, s["star_tracker"]["noise_std_rad"])
-            out["st"] = quat_normalize(quat_mult(dq, dyn.q))
+            # D.3: a dropout window means the channel is ABSENT, not noisy -- the MEKF
+            # keys off `"st" in meas`, so absence is the correct signal.
+            if self.faults is None or self.faults.st_available(dyn.t):
+                dq = _small_rotation(rng, s["star_tracker"]["noise_std_rad"])
+                out["st"] = quat_normalize(quat_mult(dq, dyn.q))
 
         if s["gps"]["enabled"]:
             out["gps_r"] = dyn.r + rng.normal(0.0, s["gps"]["position_noise_m"], 3)

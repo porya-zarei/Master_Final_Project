@@ -4,6 +4,39 @@ Short entries only: what was done, what it changed, and the commit. Detail lives
 
 ---
 
+## 2026-11-06 — D.3: fault taxonomy behind flags (45 tests, flags-off bit-identical)
+
+**Done.** `satellite_adcs/fault_taxonomy.py` + plumbing in `dynamics.py`, `sensors.py`, `simulate.py`;
+`tests/test_fault_taxonomy.py` (13 tests). Tests **32 → 45**, all green. Historical default path
+**0.000e+00** unchanged (reproducibility guard re-run).
+
+**Families implemented, all default OFF**
+- wheel: `dead`, `locked`, `ramp` (h = max(floor, 1 − rate·(t−t₀))), `intermittent` (period/duty/depth);
+- sensor: gyro **bias step**, **star-tracker dropout** (channel absent, not noisy — the MEKF keys off
+  `"st" in meas`);
+- saturation was already present (wheel-speed clip, G12) and is now exercised by a test.
+
+**The modelling decision that matters (D-14):** `locked` ≠ `dead`. A dead wheel free-spins under bearing
+friction and still reacts on the structure; a jammed wheel does neither. Conflating them with a single
+`h = 0` would have been wrong, and the regression test discriminates the two on wheel speed.
+
+**Implementation risk contained:** the lock mask is applied only when `locked_any` is true, so with no
+locked wheel the old expression is evaluated byte-for-byte. That is why the guard still reads
+0.000e+00 rather than "close enough".
+
+**Three of my own test expectations were wrong and caught by running them** — the gravity gradient means a
+body with all wheels locked is *not* perfectly still (only the wheel contribution vanishes); I commanded
+the locked wheel instead of a healthy one; and I had the wheel-speed sign inverted (`J_w·dω/dt = −τ_eff +
+τ_f`, so a positive command drives the wheel negative). Each is now asserted with the correct physics.
+
+**Also created:** `docs/research/CLAIMS_TABLE.md` — 18 claims, each mapped to an artifact and a status
+(SUPPORTED / PARTIAL / OPEN / REFUTED / FORBIDDEN). C-09 (the central question) is OPEN; C-10, C-15, C-16
+are FORBIDDEN. Freeze-gate prerequisite.
+
+**Next:** B.1 evaluation harness (classical arms runnable now; RL arms wait on the training runs).
+
+---
+
 ## 2026-11-06 — B.0: D4 checkpoints ARE re-evaluable (friction cells)
 
 **Done.** `scripts/b0_checkpoint_reuse.py` — hash verification, controller identity, observation
