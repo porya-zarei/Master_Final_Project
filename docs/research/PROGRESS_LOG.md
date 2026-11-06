@@ -4,6 +4,39 @@ Short entries only: what was done, what it changed, and the commit. Detail lives
 
 ---
 
+## 2026-11-06 — B.1 harness + classical pass (cross-check reproduces M3.3-B exactly)
+
+**Done.** `scripts/b1_residual_vs_classical.py`: 5 conditions × {C1 oracle LQR, C2 gain-scheduled,
+R1 SAC, R2 PPO}, n=24, 900 s, both holds, paired McNemar per seed, Holm across seeds, per-seed sign
+agreement, per-episode artifacts, `--report-only`, `--append`. It reuses the **verified** B.0
+observation adapter rather than re-implementing it.
+
+**Cross-check PASSED.** The classical pass reproduces the M3.3-B oracle cells *exactly*: S0 0.243,
+S2 1.570 / 8.3 %, S4 1.570 / 8.3 %, S6 91.342, S7 0.243. The new harness scores identically to the
+earlier grid, so the two are comparable.
+
+**240 classical episodes, 18.8 min** (S0/S2/S4/S6/S7 × C1/C2 × 24).
+
+**Finding — `C2_gain_sched` is not a second baseline where the claim lives.** It is *identical* to C1 on
+every h = 1 cell by construction (re-solving R from the authority returns R0 when healthy). It diverges
+only where health ≠ 1: on S4 it is **worse** (1.918 vs 1.570 deg) and on S6 **better but still failing**
+(66.8 vs 91.3 deg, 0 % success either way). It must not be presented as an independent baseline for the
+friction claim.
+
+**Two of my own bugs, caught by running:** `--arms` silently added both classical arms regardless of the
+filter, and `--append` had a duplicate `rows = []` that discarded the merged rows.
+
+**Host constraint (recorded):** 4 workers now die with `numpy._ArrayMemoryError` / `WinError 1455` —
+the system *commit limit*, not free RAM (2.4 GB free). Classical pass runs at 2 workers; RL arms load
+torch and must run **separately at `--procs 1`**, merging with `--append`.
+
+**Pending:** the RL pass (handed to the researcher). Until it lands, B.1 is a baseline table and the
+report says so in a banner. Q-01 stays OPEN.
+
+**Next:** RL pass → verdicts; then C-lite.
+
+---
+
 ## 2026-11-06 — D.3: fault taxonomy behind flags (45 tests, flags-off bit-identical)
 
 **Done.** `satellite_adcs/fault_taxonomy.py` + plumbing in `dynamics.py`, `sensors.py`, `simulate.py`;

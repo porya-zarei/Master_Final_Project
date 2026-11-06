@@ -53,6 +53,7 @@ Repo facts at creation: branch `residual-rl`, HEAD `c9a4aa5`, 72 tracked Python 
 | id | experiment | script | artifact | status |
 |---|---|---|---|---|
 | E-23 | **B.0 checkpoint-reusability gate** — D4 policies: hash match, wrapper-vs-classical controller identity, 15-dim observation reconstruction, command-level equivalence over 40 perturbed states, SB3 load test | `scripts/b0_checkpoint_reuse.py` | `results/b0/b0_checkpoint_reuse.json`, `reports/b0_checkpoint_reuse.json` | **VALID** — command equivalence **0.000e+00**; hashes match; `K` identical (0.000e+00); all 3 policies load. Verdict: re-evaluable for h = 1 cells only (D-13). A *trajectory* comparison is meaningless here — the harnesses draw their own orbit/noise (7.6 km apart at t=1 s) |
+| E-24 | **B.1 classical pass** — 5 conditions × {C1 oracle LQR, C2 gain-scheduled} × n=24, 900 s, both holds | `scripts/b1_residual_vs_classical.py` | `results/b1/run.json` (240 rows), `results/b1/episodes/`, `reports/b1_residual_vs_classical.json` | **PARTIAL** — classical arms only; no RL arm scored yet, so the B.4 verdicts are not evaluable. Cross-check: reproduces the M3.3-B oracle cells **exactly** (S0 0.243, S2 1.570/8.3 %, S4 1.570/8.3 %, S6 91.342, S7 0.243) |
 
 ## Rules
 
