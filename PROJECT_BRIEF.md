@@ -1,3 +1,14 @@
+> ## ✅ ACTIVE PLATFORM STATUS (`2026-11-22` — `codes/v2` CCR v2 on `master`)
+> - **Active Codebase:** [`codes/v2/`](codes/v2/) (`adcs-rl`, commit `ee67ba3`) implements the validated **Capability-Informed, Uncertainty-Aware, Directionally Gated Residual Reinforcement Learning (CCR v2)** platform on reference plant `spacecraft_reference_001` (100 kg, 4-wheel pyramid RW + 3-axis MTQ, 5 Hz control / 100 Hz RK4 `fast_rk4`, official degree-13 IAGA IGRF-14, 6-state MEKF, online RLS capability estimator, shared box-constrained `cap_alloc`).
+> - **Archived Prototype:** The original `v1` simulator and scripts described in the historical sections below have been archived verbatim to [`codes/v1/`](codes/v1/) (`D-15`). Nothing in the historical `v1` text below was deleted.
+> - **Authoritative Current Entry Points:**
+>   1. Root overview & verification commands: [`README.md`](README.md)
+>   2. Confirmatory benchmark report (`E003_ccr_v2_confirmatory`, 3,330 held-out test episodes, Registry `E-29`) & Basilisk `2.12.2` 8-regime validation (`E-27`): [`codes/v2/docs/FINAL_RESEARCH_REPORT.md`](codes/v2/docs/FINAL_RESEARCH_REPORT.md) and [`codes/v2/docs/agent_reports/PHASE_3_REPORT.md`](codes/v2/docs/agent_reports/PHASE_3_REPORT.md)
+>   3. Living research governance & claim status: [`docs/research/MASTER_ROADMAP.md`](docs/research/MASTER_ROADMAP.md), [`docs/research/CLAIMS_TABLE.md`](docs/research/CLAIMS_TABLE.md), and [`docs/research/DECISIONS.md`](docs/research/DECISIONS.md) (`D-15..D-19`)
+> - **Boundary Note:** Formal stability guarantee claims (`C-12`) and HIL validation claims (`C-15`) remain strictly `FORBIDDEN`; target C99/HIL deployment on **Raspberry Pi CM5** and **STM32H563ZIT** is deferred to subsequent hardware phases.
+
+---
+
 # Project Brief — Fault-Tolerant Nanosatellite Attitude Control (M.Sc. Thesis)
 
 > ## ⛔ READ THE ERRATUM AT THE END OF THIS FILE FIRST

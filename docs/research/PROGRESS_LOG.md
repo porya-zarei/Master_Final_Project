@@ -4,6 +4,40 @@ Short entries only: what was done, what it changed, and the commit. Detail lives
 
 ---
 
+## 2026-11-22 — codes/v2 CCR v2 Platform, Stage 1–4 Hardening, Basilisk 2.12.2 Cross-Validation, Confirmatory E003, codes/v1 Archival & Merge to master
+
+**Done.** Completed and verified the full **CCR v2** research platform in [`codes/v2/`](../../codes/v2/) (`adcs-rl`, commit `ee67ba3`), archived the historical `v1` codebase (`codes/*` → [`codes/v1/`](../../codes/v1/)) (`D-15`), and synchronized all outer repository governance documents (`D-15..D-19`, `E-25..E-29`, `C-08..C-23`, `Q-01..Q-15`) for merge of `residual-rl` into `master`. Full detail in [`codes/v2/docs/FINAL_RESEARCH_REPORT.md`](../../codes/v2/docs/FINAL_RESEARCH_REPORT.md) and [`codes/v2/docs/agent_reports/PHASE_3_REPORT.md`](../../codes/v2/docs/agent_reports/PHASE_3_REPORT.md).
+
+**Architecture & Stage 1–4 Hardening (`E-28`)**
+- **Reference plant (`spacecraft_reference_001`):** 100 kg spacecraft, 4-wheel pyramid RW + 3-axis MTQ, `5 Hz` control (`200 ms` period), `100 Hz` RK4 (`fast_rk4`), official degree-13 IAGA **IGRF-14**, 6-state MEKF with discrete `Q_d` scaling and post-dropout covariance reset, online RLS capability estimator with directional forgetting, `S4` additive bias-vs-gain separation, `unverified_unexcited` flag, and unexcited confidence cap `<= 0.85`; shared box-constrained `cap_alloc` across `A4..A7` and all `Abl_A7_*` arms (zero oracle `h_true` leakage).
+- **CCR v2 control law:** `tau_cmd = tau_classical + rho * alpha * G * tau_rl` separating intervention need (`rho`, with tachometer noise floor + attitude/rate deadzones forcing nominal `S0` mean `||tau_rl_gated|| < 1e-4 N*m`), trust (`alpha`), directional capability (`G`), and deterministic safety supervisor (`M3_UNKNOWN_INVALID_UNSAFE` latch setting `rl_permitted = False` / `tau_rl_gated = 0` under star-tracker dropout or persistent `authority_infeasible`).
+- **Strong classical baseline (`A3_strong_classical`):** CARE LQR + gyro feedforward + `0.08 rad/s` slew limiter + 3-axis nonlinear ESO/DOB + `cap_alloc` + observability gain schedule + MTQ assist/unloading.
+- **Core test verification:** `python -m ruff check --no-cache src tests scripts` → **All checks passed!**; `python -m pytest -v -p no:cacheprovider` (Python 3.14.6) → **47 passed, 2 skipped**.
+
+**Live Basilisk 2.12.2 8-Regime Cross-Validation (`E-27`, [`PHASE_3_REPORT.md`](../../codes/v2/docs/agent_reports/PHASE_3_REPORT.md))**
+- Executed `tests/integration/test_phase3_basilisk.py` in Python 3.11 `.venv_bsk` against live **Basilisk `2.12.2`**: **5 passed, 0 failed (`8/8` regimes PASS)**.
+- **Open-loop plant:** `R1` 10 s (`9.313e-09 m` / `9.31 nm` pos, `0.0086 deg` att, `8.39 nT` B-field), `R4` wheel saturation (`0.0682 deg`), `R6` MTQ saturation orthogonality (`tau·B ~ 1.995e-14`), `R8` 600 s long-horizon (`0.197 um` pos, `0.2870 deg` att).
+- **Closed-loop parity (`fast_rk4` vs `basilisk`):** `R2` 90° slew (`0.6744 deg` / diff `0.0000 deg`), `R3` 10°/s detumble (`0.4241 vs 0.4211 deg` / diff `0.0225 deg`), `R5` RW0 50%+0.015 N·m (`0.1062 vs 0.1047 deg` / diff `0.0260 deg`), `R7` 20 s star-tracker dropout (`0.0938 vs 0.1014 deg` / diff `0.0105 deg`).
+
+**Frozen Pilots (`E-25, E-26`) & Confirmatory Benchmark `E003_ccr_v2_confirmatory` (`E-29`, [`FINAL_RESEARCH_REPORT.md`](../../codes/v2/docs/FINAL_RESEARCH_REPORT.md))**
+- Pilots preserved: `E001_ccr_v2_benchmark` (`12k` steps × 1 train seed × 6 test seeds × 9 scenarios, 756 test / 1,260 total ep) and `E002_ccr_v2_igrf14_rlsfix` (`15k` steps × 1 train seed × 6 test seeds × 9 scenarios, 810 test / 1,350 total ep).
+- Confirmatory `E003_ccr_v2_confirmatory`: **15 arms**, `30,000` SAC steps × `3` independent training seeds (`42, 107, 211`, 18 policies) × `10` held-out test seeds (`100..109`) × `9` held-out scenarios (`S0..S8`) = **3,330 held-out test episodes** (`7` controllable scenarios → `n = 70` classical / `210` learned; `2` physically infeasible `S2, S3` → `n = 20` classical / `60` learned). Policy-averaged paired scenario-seed tests (`n_pairs = 70` controllable / `90` all), 5,000-sample paired bootstrap CIs, two-sided Wilcoxon with step-down Holm-Bonferroni (`wilcoxon_p_holm`).
+- **Failure & Infeasibility (`failure_breakdown_heldout.csv`):** `A7_ccr_v2_full`, `A7_ccr_v2_eso`, and `Abl_A7_clean_trained` achieve **0.00% Controllable-7 LoC (`0/210`)** across all 3 seeds and **100.0% Infeasibility Detected & Correct Infeasibility Response (`60/60`)** on `S2/S3` (`||tau_rl_gated|| < 1e-6 N*m`, `M3` latch). Comparators: `A0` 12.86% (9/70), `A1` 8.57% (6/70), `A2` 0.00% (0/70), `A3` 0.00% (0/70), `A4` 7.62% (16/210, 0% infeas resp), `A5` 1.43% (3/210, 0% infeas resp), `A6` 8.57% (18/210: 46.67% on `S5`, 13.33% on `S4`; 100% infeas resp), `Abl_A7_no_alpha` 0.48% (1/210), `Abl_A7_no_supervisor` 0.00% controllable LoC / 0.0% infeas resp. (All arms 100.0% LoC on physically infeasible `S2 ~104.4°` and `S3 ~66.6-74.7°`.)
+- **Controllable-7 Summary & Paired Tests (`n_pairs = 70`):**
+  - `A3_strong_classical`: `0.2315°` mean / `0.1306°` median (IQR `0.1261°`), `12.40 s` med recovery, `1.6824 N·m·s`.
+  - `A7_ccr_v2_eso`: **`0.2087°` mean** (lowest of all 15 arms) / `0.1518°` median (IQR `0.1124°`), `12.80 s` recovery, `1.6968 N·m·s`; beats `A3` on `S4` (`0.3818° vs 0.4904°`) and `S8` (`0.2934° vs 0.4037°`); vs `A3` paired mean diff `-0.0228°`, `p_Holm = 0.6591`.
+  - `A7_ccr_v2_full`: `0.3258°` mean / `0.1288°` median (IQR `0.1192°`), `11.40 s` recovery, `1.6214 N·m·s`; matches `A3` on `S0` (`0.1414° vs 0.1415°`), cuts `S8` 3.3x (`0.1227° vs 0.4037°`), beats `A0` (`p_Holm = 0.01490` vs A0 table / `0.00948` in ablations-vs-A7 table) and `A4` (`p_Holm = 4.32e-05`), ties `A3` overall (`52.86%` wins, `p_Holm = 1.0000`), trails `A3` on `S4` (`1.4394°` mean, LQR-only backbone).
+  - `Abl_A7_clean_trained`: `0.2780°` mean / **`0.0970°` median** (IQR `0.0995°`), `7.80 s` recovery, `0.00%` LoC; significantly beats both `A7_ccr_v2_full` (`-0.0372°` med diff, `p_Holm = 3.05e-05`, `78.57%` wins) and `A3_strong_classical` (`-0.0326°` med diff, `p_Holm = 0.02453`, `71.43%` wins); `S4` mean still `1.2567°` without ESO.
+  - **All 4 CCR v2 ablations survive Holm-Bonferroni on Controllable-7 (`vs A7_ccr_v2_full`, `n_pairs = 70`):**
+    1. `Abl_A7_no_rho`: `+0.2256°` mean diff `[95% CI +0.1465°, +0.3022°]`, `+0.1729°` med diff, `p_Holm = 5.72e-08` (`A7` wins `94.3%`; All-9 `p_Holm = 7.99e-09`)
+    2. `Abl_A7_no_alpha`: `+0.1579°` mean diff `[95% CI +0.0680°, +0.2534°]`, `+0.0354°` med diff, `p_Holm = 7.31e-06` (`A7` wins `75.7%`; All-9 `p_Holm = 8.11e-04`)
+    3. `Abl_A7_no_G`: `+0.0122°` med diff (`+46.5%` mean RL torque `0.00268 -> 0.00393 N·m`, `S8` `0.1227° -> 0.2928°`), `p_Holm = 0.00939` (`A7` wins `72.9%`; All-9 `p_Holm = 0.0904` raw `0.0181`)
+    4. `Abl_A7_no_supervisor`: `+0.0301°` mean diff, `+0.0048°` med diff, `p_Holm = 0.01312` (`A7` wins `71.4%`, infeas response drops `100% -> 0%`; All-9 `p_Holm = 0.0525` raw `0.00657`)
+- **Desktop Python CPU Profile (`cpu_profile.json`, Windows 11, Python 3.14.6, NumPy 2.5.0, degree-13 IGRF-14):** `onboard_total_B1_B3_CCR_v2` = **`5.703 ms` mean / `9.964 ms` p99** (`2.851%` mean / `4.982%` p99 of `200 ms` `5 Hz` step); `B6_PolicyInference_NumPy` (`30->64->64->3`, `6,339` params, `24.76 KB` float32) = `0.045 ms` mean / `0.106 ms` p99.
+- **Honest boundaries enforced (`D-17, D-18`):** `n_train = 3 < 5` training-seed limitation explicitly noted; `C-12` (formal stability guarantee) and `C-15` (HIL validation) remain strictly `FORBIDDEN`; target C99/HIL deployment on **Raspberry Pi CM5** and **STM32H563ZIT** is deferred.
+
+---
+
 ## 2026-11-06 — C.1: wheel-speed sensing (default off), and how favourable the old assumption was
 
 **Done.** `satellite_adcs/wheel_sensor.py` — `TachometerModel` (clamp → quantise → noise → zero-order

@@ -34,5 +34,13 @@ Thumbs.db
 .cache/
 *.bak
 
+# ---- CCR v2 (codes/v2) environments, caches & build artifacts ----
+.venv_bsk/
+.pytest_cache/
+.mypy_cache/
+pytest-cache-files-*/
+build/
+dist/
+
 # Author's seminar material -- not thesis code, keep out of the repo
 seminar/

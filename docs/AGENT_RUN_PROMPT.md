@@ -1,3 +1,11 @@
+> ## 📜 HISTORICAL / SUPERSEDED RUN CHARTER (`2026-11-22` Update)
+> - The `2026-11-06` `v1` run charter recorded below (`D-12`) governed the archived prototype now located in [`codes/v1/`](../codes/v1/) and is **superseded** by decisions **`D-15..D-19`** in [`docs/research/DECISIONS.md`](research/DECISIONS.md) and the completed **CCR v2** platform in [`codes/v2/`](../codes/v2/) (commit `ee67ba3`).
+> - Specifically: (1) `codes/*` was archived verbatim to `codes/v1/` and superseded by `codes/v2/` (`D-15`); (2) live **Basilisk `2.12.2`** 8-regime cross-validation (`E-27`, `8/8` PASS) and confirmatory benchmark `E003_ccr_v2_confirmatory` (`E-29`, 3,330 held-out test episodes) are complete (`D-16, D-17`); (3) the researcher explicitly authorized consolidating outer repository documentation and fast-forward merging `residual-rl` into `master` (`D-19`, superseding the `2026-11-06` *"Never touch `master`"* rule below).
+> - **Still strictly in force (`D-18`):** No formal stability/safety guarantee (`C-12 FORBIDDEN`) and no hardware/real-time/HIL validation claim (`C-15 FORBIDDEN`) may be made; embedded C99 / SIL / HIL deployment on **Raspberry Pi CM5** and **STM32H563ZIT** remains deferred pending explicit researcher hardware-phase approval.
+> - Lines 1–284 of the original `2026-11-06` charter are preserved verbatim below for audit provenance.
+
+---
+
 # AGENT_RUN_PROMPT — operative run charter (supplied 2026-11-06)
 
 > **Status:** the researcher's authorisation for the run *B → C-lite → D → freeze → MIL → SIL → STOP before

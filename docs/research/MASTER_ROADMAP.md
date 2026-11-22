@@ -1,9 +1,41 @@
 # MASTER_ROADMAP — execution authority
 
-**Authoritative from:** 2026-11-06
-**Repository:** `E:\Education\Master\Final_Project` · branch `residual-rl` · HEAD at creation `c9a4aa5`
+**Last updated:** 2026-11-22 (CCR v2 platform complete at `codes/v2` commit `ee67ba3`, `codes/v1` archived, merged to `master`)  
+**Originally authoritative from:** 2026-11-06  
+**Repository:** `E:\Education\Master\Final_Project` · branch `residual-rl` → `master`  
 **Thesis:** *Fault-Tolerant Attitude Control of Nanosatellites Using Reinforcement Learning: From
 Simulation to Hardware-in-the-Loop Implementation.*
+
+---
+
+## Current State (2026-11-22) — `codes/v2` CCR v2 Complete & Merged to `master`
+
+### 1. Platform Consolidation (`D-15..D-19`)
+- **`v1` Archival (`D-15`):** All historical `v1` code and scripts (`codes/satellite_adcs/`, `codes/scripts/`, `codes/tests/`, `codes/simulation/`) were moved verbatim into [`codes/v1/`](../../codes/v1/). All historical `v1` experiments (`E-01..E-24`), retractions, and errata remain preserved in this folder.
+- **Active `v2` Platform (`D-15, D-16`):** [`codes/v2/`](../../codes/v2/) (`adcs-rl`, commit `ee67ba3`) is the authoritative thesis codebase implementing **Capability-Informed, Uncertainty-Aware, Directionally Gated Residual Reinforcement Learning (CCR v2)** on reference plant `spacecraft_reference_001`:
+  - **Plant & Environment:** 100 kg spacecraft, 4-wheel pyramid reaction wheel cluster + 3-axis magnetorquers (MTQ), `5 Hz` control cycle (`200 ms` period), `100 Hz` RK4 plant integration (`fast_rk4`), official degree-13 IAGA **IGRF-14** geomagnetic field, gravity gradient, aerodynamic drag, SRP, and residual magnetic dipole disturbances.
+  - **Estimation & Capability (`B1, B3`):** 6-state MEKF with discrete `Q_d` scaling and post-dropout covariance reset; online RLS capability estimator with directional forgetting, `S4` additive bias-vs-gain separation, `unverified_unexcited` flag, and unexcited confidence cap `<= 0.85`; shared box-constrained `cap_alloc` (`B9`) across `A4..A7` and all `Abl_A7_*` arms (zero oracle `h_true` leakage).
+  - **CCR v2 Control Law & Strong Classical Baseline (`B4..B8`):** `tau_cmd = tau_classical + rho * alpha * G * tau_rl` separating intervention need (`rho`, with tachometer noise floor and attitude/rate deadzones forcing nominal `S0` mean `||tau_rl_gated|| < 1e-4 N*m`), trust (`alpha`), directional capability (`G`), and deterministic safety supervisor (`M3_UNKNOWN_INVALID_UNSAFE` latch setting `rl_permitted = False` / `tau_rl_gated = 0` under star-tracker dropout or persistent `authority_infeasible`). Evaluated against `A3_strong_classical` (CARE LQR + gyro feedforward + `0.08 rad/s` slew limiter + 3-axis nonlinear ESO/DOB + `cap_alloc` + observability gain schedule + MTQ assist/unloading).
+
+### 2. Completed Verification & Experimental Gates (`[DONE]`)
+
+| Gate / ID | Milestone | Evidence & Verified Result | Status |
+|---|---|---|---|
+| **Stage 1–4 (`E-28`)** | Physics invariants, zero-oracle-leakage, RLS/MEKF fixes, infeasibility metrics, test & lint suite | `python -m ruff check --no-cache src tests scripts` → **All checks passed!**; `python -m pytest -v -p no:cacheprovider` (Python 3.14.6) → **47 passed, 2 skipped** | `[DONE]` |
+| **Phase 3 (`E-27`)** | Live **Basilisk `2.12.2`** 8-regime independent truth cross-validation (`test_phase3_basilisk.py`, Python 3.11 `.venv_bsk`) | **5 passed, 0 failed (`8/8` regimes PASS)**: Open-loop (`R1` 10 s: `9.313e-09 m` / `9.31 nm` pos, `0.0086 deg` att, `8.39 nT` B-field; `R4` sat `0.0682 deg`; `R6` MTQ sat `tau·B ~ 1.995e-14`; `R8` 600 s: `0.197 um` pos, `0.2870 deg` att) + Closed-loop (`R2` 90° slew `0.6744 deg` / diff `0.0000 deg`; `R3` 10°/s detumble `0.4241 vs 0.4211 deg` / diff `0.0225 deg`; `R5` RW0 50%+0.015 N·m `0.1062 vs 0.1047 deg` / diff `0.0260 deg`; `R7` 20 s ST dropout `0.0938 vs 0.1014 deg` / diff `0.0105 deg`) | `[DONE]` |
+| **Pilots (`E-25, E-26`)** | Frozen pilot benchmarks `E001_ccr_v2_benchmark` (756 test ep) & `E002_ccr_v2_igrf14_rlsfix` (810 test ep) | Architecture iteration, IGRF-14 + RLS directional-forgetting validation; preserved as frozen single-seed pilots (`PARTIAL`), superseded for thesis claims by `E003` | `[DONE]` |
+| **Confirmatory (`E-29`)** | **`E003_ccr_v2_confirmatory`** (15 arms × 30k SAC steps × 3 train seeds `42, 107, 211` × 10 test seeds `100..109` × 9 scenarios `S0..S8` = **3,330 held-out test episodes**, `n_pairs = 70 / 90`, 5,000-sample bootstrap CI + Holm-Bonferroni) | • **0.00% Controllable-7 LoC (`0/210`)** & **100.0% S2/S3 infeasibility response (`60/60`)** for `A7_ccr_v2_full`, `A7_ccr_v2_eso`, and `Abl_A7_clean_trained` (vs `A0` 12.86%, `A4` 7.62% / 0% infeas, `A6` 8.57%).<br>• `A7_ccr_v2_eso` achieves lowest Controllable-7 mean (**`0.2087°`** vs `A3` `0.2315°`, beating `A3` on `S4` `0.3818° vs 0.4904°` and `S8` `0.2934° vs 0.4037°`).<br>• `Abl_A7_clean_trained` achieves lowest Controllable-7 median (**`0.0970°`**, `7.80 s` recovery), significantly beating `A7_ccr_v2_full` (`-0.0372°`, `p_Holm = 3.05e-05`) and `A3_strong_classical` (`-0.0326°`, `p_Holm = 0.02453`).<br>• **All 4 CCR v2 ablations survive Holm-Bonferroni on Controllable-7 (`n_pairs = 70`):** `Abl_A7_no_rho` (`p_Holm = 5.72e-08`), `Abl_A7_no_alpha` (`p_Holm = 7.31e-06`), `Abl_A7_no_G` (`p_Holm = 0.00939`), `Abl_A7_no_supervisor` (`p_Holm = 0.01312`).<br>• **Desktop Python CPU profile:** `5.703 ms` mean / `9.964 ms` p99 total onboard (`2.851%` / `4.982%` of 200 ms cycle); `B6` MLP (`30->64->64->3`, `6,339` params, `24.76 KB` float32) `0.045 ms` mean / `0.106 ms` p99. | `[DONE]` |
+
+### 3. Next Steps & Remaining Authorization Gates
+1. **Phase F — Thesis Assembly (`[AUTH]`):** Integrate `E-27..E-29` tables, plots (`codes/v2/experiments/E003_ccr_v2_confirmatory/analysis/`), and `CLAIMS_TABLE.md` (`C-01..C-23`) into the M.Sc. thesis chapters, explicitly stating the `n_train = 3 < 5` training-seed limitation (`D-10, D-17`) and strict claim boundaries (`D-18`).
+2. **Optional Follow-Up Experiment (`[PLANNED]`, `Q-14`):** Evaluate `A7_ccr_v2_eso_clean_trained` (combining the 3-axis nonlinear ESO backbone of `A7_ccr_v2_eso` with the clean training curriculum of `Abl_A7_clean_trained`) across `>= 5` independent training seeds to close `S4` bias error (`1.2567° -> ~0.38°`) and satisfy `D-10`'s 5-seed sign-test floor.
+3. **Target C99 / SIL / HIL Implementation on Raspberry Pi CM5 & STM32H563ZIT (`[NEEDS-APPROVAL]`, `Q-15`):** Cross-compilation of static C99 onboard blocks (`B1..B9`), `float32` precision verification, DWT hardware WCET profiling, and processor-in-the-loop / HIL validation on **Raspberry Pi CM5** and **STM32H563ZIT** remain deferred until explicit researcher approval. Until completed, **`C-12` (formal stability guarantee) and `C-15` (HIL validation) remain strictly `FORBIDDEN`**.
+
+---
+
+## Historical `v1` Execution Roadmap Record (2026-11-06, Archived under `codes/v1/`)
+
+> *Preserved verbatim below for historical provenance. The `v1` phases below reference the archived `codes/v1/` tree prior to the `codes/v2` CCR v2 platform.*
 
 ## Document authority
 
