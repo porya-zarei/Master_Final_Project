@@ -1,0 +1,74 @@
+{
+  "control_period_budget_ms": 200.0,
+  "budget_utilization_pct_mean": 2.8514351014746353,
+  "budget_utilization_pct_p99": 4.98197048320435,
+  "peak_python_traced_memory_kb": 145.994140625,
+  "current_python_traced_memory_kb": 131.595703125,
+  "mlp_param_count": 6339,
+  "mlp_weights_float32_kb": 24.76171875,
+  "components": [
+    {
+      "component": "B1_MEKF",
+      "n_calls": 500,
+      "mean_ms": 1.0135876005515456,
+      "p50_ms": 1.0833499836735427,
+      "p95_ms": 1.7229000746738163,
+      "p99_ms": 1.8431849486660212,
+      "max_ms": 2.0569999469444156
+    },
+    {
+      "component": "B3_OnlineCapability",
+      "n_calls": 500,
+      "mean_ms": 2.2998391995206475,
+      "p50_ms": 2.415599941741675,
+      "p95_ms": 3.7848700594622637,
+      "p99_ms": 4.037922010757029,
+      "max_ms": 4.5467999298125505
+    },
+    {
+      "component": "B6_PolicyInference_NumPy",
+      "n_calls": 500,
+      "mean_ms": 0.0451785980258137,
+      "p50_ms": 0.046600005589425564,
+      "p95_ms": 0.07930502179078758,
+      "p99_ms": 0.10611099307425319,
+      "max_ms": 0.1870999112725258
+    },
+    {
+      "component": "CCR_v2_Controller_Step",
+      "n_calls": 500,
+      "mean_ms": 2.3894434028770775,
+      "p50_ms": 2.480600029230118,
+      "p95_ms": 4.041594924638048,
+      "p99_ms": 4.212673061992973,
+      "max_ms": 4.5912000350654125
+    },
+    {
+      "component": "A3_StrongClassical_Step",
+      "n_calls": 500,
+      "mean_ms": 1.4309171962086111,
+      "p50_ms": 1.555600028950721,
+      "p95_ms": 2.409204951254651,
+      "p99_ms": 2.6209769304841752,
+      "max_ms": 2.87580001167953
+    },
+    {
+      "component": "onboard_total_B1_B3_CCR_v2",
+      "n_calls": 500,
+      "mean_ms": 5.702870202949271,
+      "p50_ms": 5.741050001233816,
+      "p95_ms": 9.471994946943596,
+      "p99_ms": 9.9639409664087,
+      "max_ms": 10.869199992157519
+    },
+    {
+      "component": "FastSimulator_RK4_Step",
+      "n_calls": 500,
+      "mean_ms": 58.59968880191445,
+      "p50_ms": 58.739300060551614,
+      "p95_ms": 88.32380509120412,
+      "p99_ms": 96.903144903481,
+      "max_ms": 106.01510002743453
+    }
+  ]
+}

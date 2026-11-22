@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live 3D Basilisk 2.12.2 + CCR v2 Spacecraft ADCS Studio</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0e1628;
+    --border: #1e2d4d;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --cyan: #38bdf8;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body { background: var(--bg); color: var(--text); overflow-x: hidden; }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: #0a1020; border-bottom: 1px solid var(--border); gap: 10px;
+  }
+  .title-block h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; color: #f8fafc; }
+  .title-block .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .scenario-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .sc-btn {
+    background: #131f38; color: var(--text); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .sc-btn:hover { border-color: var(--cyan); }
+  .sc-btn.active { background: #1d4ed8; border-color: #60a5fa; color: #fff; box-shadow: 0 0 12px rgba(56,189,248,0.35); }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr 355px;
+    gap: 10px;
+    padding: 10px;
+    height: calc(100vh - 122px);
+    min-height: 540px;
+  }
+  @media (max-width: 1180px) {
+    .main-grid { grid-template-columns: 1fr 1fr; height: auto; }
+    .hud-col { grid-column: span 2; }
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    display: flex; flex-direction: column; overflow: hidden; position: relative;
+    min-height: 0; min-width: 0;
+  }
+  .card-hdr {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 12px; background: rgba(15, 23, 42, 0.9); border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 600; color: #cbd5e1; flex-shrink: 0;
+  }
+  .hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .canvas-wrap {
+    flex: 1; min-height: 360px; position: relative; overflow: hidden; cursor: grab;
+    background: radial-gradient(circle at 50% 45%, #0f1b33 0%, #050811 100%);
+  }
+  .canvas-wrap:active { cursor: grabbing; }
+  canvas.view3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .overlay-badge {
+    position: absolute; top: 10px; left: 10px; padding: 5px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.4px; pointer-events: none;
+    background: rgba(10, 16, 32, 0.85); border: 1px solid var(--border);
+  }
+  .legend-box {
+    position: absolute; bottom: 8px; left: 10px; display: flex; flex-wrap: wrap; gap: 10px;
+    background: rgba(7, 11, 20, 0.78); padding: 4px 8px; border-radius: 6px; font-size: 11px;
+    border: 1px solid rgba(30,45,77,0.7); pointer-events: none;
+  }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+
+  .hud-col { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .phase-banner {
+    padding: 9px 12px; border-radius: 8px; font-weight: 700; font-size: 12px;
+    border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+  }
+  .phase-ACQUISITION { background: rgba(56,189,248,0.14); border-color: var(--cyan); color: #bae6fd; }
+  .phase-NOMINAL_LOCK { background: rgba(34,197,94,0.14); border-color: var(--green); color: #bbf7d0; }
+  .phase-DISTURBANCE { background: rgba(239,68,68,0.18); border-color: var(--red); color: #fecaca; }
+  .phase-WHEEL_FAULT { background: rgba(245,158,11,0.18); border-color: var(--amber); color: #fde68a; }
+  .phase-FAULT_PERTURBED { background: rgba(239,68,68,0.24); border-color: var(--red); color: #fecaca; }
+
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  }
+  .kpi .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi .v { font-size: 16px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  .rw-panel, .plot-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  .sec-title { font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .rw-row { margin-bottom: 6px; }
+  .rw-meta { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+  .bar-bg { width: 100%; height: 7px; background: #1e293b; border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; transition: width 0.08s linear; border-radius: 4px; }
+  .bar-est { position: absolute; top: 0; bottom: 0; width: 3px; background: #fff; box-shadow: 0 0 4px #fff; }
+
+  canvas.spark { width: 100%; height: 74px; display: block; background: #080e1c; border-radius: 6px; border: 1px solid #16223a; }
+
+  footer.transport {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    background: #0a1020; border-top: 1px solid var(--border);
+  }
+  .t-btn {
+    background: #1e293b; color: #f8fafc; border: 1px solid #334155;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  .t-btn:hover { background: #334155; }
+  .timeline-wrap { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .phase-strip { display: flex; height: 6px; border-radius: 3px; overflow: hidden; opacity: 0.85; }
+  input[type=range] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
+  .t-readout { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 118px; text-align: right; color: var(--cyan); font-weight: 700; }
+  select.speed-sel { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 5px 8px; border-radius: 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-block">
+    <h1>Basilisk 2.12.2 + CCR v2 — Live 3D Spacecraft Orbit, Disturbance &amp; Reaction-Wheel Failure Studio</h1>
+    <div class="sub" id="subHeader">Real Basilisk rigid-body &amp; orbital physics · MEKF · Online RLS Capability · Supervisor (M0-M4) · Trained CCR v2 RL</div>
+  </div>
+  <div class="scenario-bar" id="scenarioBar"></div>
+</header>
+
+<div class="main-grid">
+  <div class="card">
+    <div class="card-hdr">
+      <span>1. 3D Earth Orbit &amp; Nadir Pointing View (ECI)</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <button class="t-btn" id="orbitModeBtn" style="padding:2px 8px;font-size:11px;">Orbit: Real Basilisk ECI</button>
+        <span class="hint">Drag · Scroll</span>
+      </span>
+    </div>
+    <div class="canvas-wrap" id="orbitWrap">
+      <canvas class="view3d" id="orbitCanvas"></canvas>
+      <div class="overlay-badge" id="orbitBadge">ALT: --- km | VEL: --- km/s</div>
+      <div class="legend-box">
+        <span><i class="dot" style="background:#38bdf8"></i>Orbit Path</span>
+        <span><i class="dot" style="background:#22c55e"></i>Nadir Beam &amp; Camera</span>
+        <span><i class="dot" style="background:#f59e0b"></i>Velocity</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">
+      <span>2. 3D Satellite Body Attitude, Spinning Wheels &amp; Disturbance View</span>
+      <span class="hint">Drag to rotate · Scroll to zoom</span>
+    </div>
+    <div class="canvas-wrap" id="satWrap">
+      <canvas class="view3d" id="satCanvas"></canvas>
+      <div class="overlay-badge" id="satBadge">ATTITUDE ERROR: --- deg</div>
+      <div class="legend-box">
+        <span><i class="dot" style="background:#22c55e"></i>Nadir Target</span>
+        <span><i class="dot" style="background:#38bdf8"></i>+Z Camera</span>
+        <span><i class="dot" style="background:#ef4444"></i>Disturbance Torque</span>
+        <span><i class="dot" style="background:#a78bfa"></i>Control Torque</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud-col">
+    <div class="phase-banner phase-ACQUISITION" id="phaseBanner">
+      <span id="phaseText">PHASE 1: RANDOM INIT -> NADIR LOCK</span>
+      <span id="modeBadge" style="font-size:11px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,0.35);">M0_NOMINAL</span>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi"><div class="k">Attitude Error</div><div class="v" id="kpiErr" style="color:var(--cyan)">0.00°</div></div>
+      <div class="kpi"><div class="k">Body Rate Error</div><div class="v" id="kpiRate">0.00°/s</div></div>
+      <div class="kpi"><div class="k">Need Gate (rho)</div><div class="v" id="kpiRho" style="color:var(--purple)">0.00</div></div>
+      <div class="kpi"><div class="k">Trust Gate (alpha)</div><div class="v" id="kpiAlpha" style="color:var(--green)">0.00</div></div>
+    </div>
+
+    <div class="rw-panel">
+      <div class="sec-title">Reaction Wheels &amp; MTQ Dipole (Bar = True · Tick = Online RLS)</div>
+      <div class="rw-row">
+        <div class="rw-meta"><span>RW1 (X-Axis)</span><span id="rw0Txt">100% | 0 RPM</span></div>
+        <div class="bar-bg"><div class="bar-fill" id="rw0Bar" style="width:100%;background:var(--green)"></div><div class="bar-est" id="rw0Est" style="left:100%"></div></div>
+      </div>
+      <div class="rw-row">
+        <div class="rw-meta"><span>RW2 (Y-Axis)</span><span id="rw1Txt">100% | 0 RPM</span></div>
+        <div class="bar-bg"><div class="bar-fill" id="rw1Bar" style="width:100%;background:var(--green)"></div><div class="bar-est" id="rw1Est" style="left:100%"></div></div>
+      </div>
+      <div class="rw-row">
+        <div class="rw-meta"><span>RW3 (Z-Axis)</span><span id="rw2Txt">100% | 0 RPM</span></div>
+        <div class="bar-bg"><div class="bar-fill" id="rw2Bar" style="width:100%;background:var(--green)"></div><div class="bar-est" id="rw2Est" style="left:100%"></div></div>
+      </div>
+      <div class="rw-meta" style="margin-top:4px;color:var(--cyan);">
+        <span>MTQ Dipole (2.0 A·m² max)</span>
+        <span id="mtqTxt">[0.00, 0.00, 0.00] A·m²</span>
+      </div>
+    </div>
+
+    <div class="plot-panel">
+      <div class="sec-title">Attitude Error History (deg) — Red = Disturbance · Dashed = RW Fault</div>
+      <canvas class="spark" id="errSpark"></canvas>
+    </div>
+
+    <div class="plot-panel">
+      <div class="sec-title">CCR v2 Gate (rho purple · alpha green) &amp; RW1 RLS Est (amber)</div>
+      <canvas class="spark" id="gateSpark"></canvas>
+    </div>
+
+    <div class="plot-panel" style="font-size:11px;color:var(--muted);line-height:1.45" id="initInfo"></div>
+  </div>
+</div>
+
+<footer class="transport">
+  <button class="t-btn" id="playBtn">Pause</button>
+  <button class="t-btn" id="resetBtn">Restart</button>
+  <select class="speed-sel" id="speedSel">
+    <option value="1">1x (Real-Time)</option>
+    <option value="2">2x</option>
+    <option value="5">5x</option>
+    <option value="10" selected>10x (Orbit View)</option>
+    <option value="25">25x</option>
+    <option value="50">50x</option>
+  </select>
+  <div class="timeline-wrap">
+    <div class="phase-strip" id="phaseStrip"></div>
+    <input type="range" id="scrubber" min="0" max="100" value="0" />
+  </div>
+  <div class="t-readout" id="timeReadout">t = 0.0 s / 120.0 s</div>
+</footer>
+
+<script>
+const SCENARIOS = __SCENARIOS_JSON__;
+let curIdx = Math.min(1, SCENARIOS.length - 1);
+let frameF = 0.0;
+let playing = true;
+let speed = 10.0;
+let fast360Orbit = false;
+let lastTs = performance.now();
+
+const orbitCam = { yaw: 0.72, pitch: 0.42, zoom: 1.0, dragging: false, lx: 0, ly: 0 };
+const satCam   = { yaw: 0.65, pitch: 0.35, zoom: 1.05, dragging: false, lx: 0, ly: 0 };
+
+function attachCam(wrapId, cam) {
+  const el = document.getElementById(wrapId);
+  el.addEventListener('mousedown', e => { cam.dragging = true; cam.lx = e.clientX; cam.ly = e.clientY; });
+  window.addEventListener('mouseup', () => { cam.dragging = false; });
+  window.addEventListener('mousemove', e => {
+    if (!cam.dragging) return;
+    cam.yaw += (e.clientX - cam.lx) * 0.008;
+    cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + (e.clientY - cam.ly) * 0.008));
+    cam.lx = e.clientX; cam.ly = e.clientY;
+  });
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    cam.zoom = Math.max(0.45, Math.min(2.6, cam.zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+  }, { passive: false });
+}
+attachCam('orbitWrap', orbitCam);
+attachCam('satWrap', satCam);
+
+function rotCam(p, cam) {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const x1 = cy * p[0] + sy * p[2];
+  const z1 = -sy * p[0] + cy * p[2];
+  const y2 = cp * p[1] - sp * z1;
+  const z2 = sp * p[1] + cp * z1;
+  return [x1, y2, z2];
+}
+function proj(p, cam, w, h, scale, dist) {
+  const r = rotCam(p, cam);
+  const z = r[2] + dist;
+  const f = (scale * cam.zoom * dist) / Math.max(0.25, z);
+  return { x: w * 0.5 + r[0] * f, y: h * 0.5 - r[1] * f, z: r[2], f };
+}
+function matVec(m, v) {
+  return [
+    m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2],
+    m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2],
+    m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2],
+  ];
+}
+function vecSub(a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
+function vecAdd(a, b) { return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+function vecScale(a, s) { return [a[0]*s, a[1]*s, a[2]*s]; }
+function vecCross(a, b) { return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function vecDot(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+function vecNorm(a) { return Math.hypot(a[0], a[1], a[2]); }
+
+function drawArrow3D(ctx, p0, p1, cam, w, h, scale, dist, color, width, label) {
+  const a = proj(p0, cam, w, h, scale, dist);
+  const b = proj(p1, cam, w, h, scale, dist);
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+  if (len > 6) {
+    const ux = dx / len, uy = dy / len;
+    const hs = Math.min(10, len * 0.35);
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - ux*hs - uy*hs*0.45, b.y - uy*hs + ux*hs*0.45);
+    ctx.lineTo(b.x - ux*hs + uy*hs*0.45, b.y - uy*hs - ux*hs*0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  if (label) {
+    ctx.font = '600 11px Segoe UI, sans-serif';
+    ctx.fillText(label, b.x + 5, b.y - 4);
+  }
+  ctx.restore();
+}
+
+function initScenarioUI() {
+  const bar = document.getElementById('scenarioBar');
+  bar.innerHTML = '';
+  SCENARIOS.forEach((sc, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'sc-btn' + (i === curIdx ? ' active' : '');
+    btn.textContent = sc.label;
+    btn.onclick = () => selectScenario(i);
+    bar.appendChild(btn);
+  });
+}
+
+function selectScenario(i) {
+  curIdx = i;
+  frameF = 0;
+  document.querySelectorAll('.sc-btn').forEach((b, idx) => b.classList.toggle('active', idx === i));
+  const sc = SCENARIOS[curIdx];
+  const scrub = document.getElementById('scrubber');
+  scrub.max = sc.frames.length - 1;
+  scrub.value = 0;
+
+  const ev = sc.events;
+  const dur = ev.duration_s;
+  const segs = [
+    { w: ev.dist1_start / dur * 100, c: '#38bdf8', title: 'Random Init -> Nadir Lock' },
+    { w: (ev.dist1_end - ev.dist1_start) / dur * 100, c: '#ef4444', title: 'External Disturbance' },
+    { w: (ev.fault_start - ev.dist1_end) / dur * 100, c: '#22c55e', title: 'Nominal Lock' },
+    { w: (ev.dist2_start - ev.fault_start) / dur * 100, c: '#f59e0b', title: 'RW Failure Injected' },
+    { w: (ev.dist2_end - ev.dist2_start) / dur * 100, c: '#dc2626', title: 'Post-Fault Perturbation' },
+    { w: (dur - ev.dist2_end) / dur * 100, c: '#f59e0b', title: 'Post-Fault Response' },
+  ];
+  document.getElementById('phaseStrip').innerHTML =
+    segs.map(s => `<div title="${s.title}" style="width:${s.w}%;background:${s.c}"></div>`).join('');
+
+  document.getElementById('subHeader').textContent =
+    `Basilisk ${sc.basilisk_version} · Controller: ${sc.controller} · Spacecraft: ${sc.spacecraft_name} · Seed: ${sc.seed}`;
+  document.getElementById('initInfo').innerHTML =
+    `<b>Random Initial Orbit &amp; Attitude:</b> Alt ${sc.init.altitude_km} km · Inc ${sc.init.inc_deg}° · RAAN ${sc.init.raan_deg}° · ν₀ ${sc.init.nu_deg}°<br>` +
+    `<b>Init Tumble:</b> ${sc.init.att_err_deg}° off-nadir @ ${sc.init.rate_deg_s}°/s &nbsp;|&nbsp; ` +
+    `<b>Summary:</b> Nadir Lock ${sc.summary.nadir_locked_deg}° · Dist Peak ${sc.summary.peak_disturbance_deg}° · Post-Fault Peak ${sc.summary.peak_post_fault_deg}°`;
+}
+
+function resizeCanvas(canvas, fixedH) {
+  const target = fixedH ? canvas : canvas.parentElement;
+  const rect = target.getBoundingClientRect();
+  const cssW = Math.max(100, Math.floor(rect.width));
+  const cssH = fixedH || Math.max(100, Math.floor(rect.height));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const pxW = Math.floor(cssW * dpr);
+  const pxH = Math.floor(cssH * dpr);
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: cssW, h: cssH };
+}
+
+function renderOrbitView(sc, f) {
+  const canvas = document.getElementById('orbitCanvas');
+  const { ctx, w, h } = resizeCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+
+  const scale = Math.min(w, h) * 0.044;
+  const dist = 26.0;
+  const R_E = 6.371;
+
+  ctx.fillStyle = 'rgba(226,232,240,0.45)';
+  for (let i = 0; i < 65; i++) {
+    ctx.fillRect(((i * 197.3) % 1) * w, ((i * 313.7) % 1) * h, 1.3, 1.3);
+  }
+
+  const centerP = proj([0, 0, 0], orbitCam, w, h, scale, dist);
+  const earthRadPx = R_E * centerP.f;
+  const grad = ctx.createRadialGradient(
+    centerP.x - earthRadPx * 0.35, centerP.y - earthRadPx * 0.3, earthRadPx * 0.1,
+    centerP.x, centerP.y, earthRadPx * 1.18
+  );
+  grad.addColorStop(0, '#38bdf8');
+  grad.addColorStop(0.55, '#1d4ed8');
+  grad.addColorStop(0.86, '#0b1e47');
+  grad.addColorStop(1, 'rgba(56,189,248,0)');
+  ctx.beginPath(); ctx.arc(centerP.x, centerP.y, earthRadPx * 1.15, 0, Math.PI * 2);
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath(); ctx.arc(centerP.x, centerP.y, earthRadPx, 0, Math.PI * 2);
+  const eFill = ctx.createRadialGradient(
+    centerP.x - earthRadPx * 0.35, centerP.y - earthRadPx * 0.35, earthRadPx * 0.08,
+    centerP.x, centerP.y, earthRadPx
+  );
+  eFill.addColorStop(0, '#3b82f6');
+  eFill.addColorStop(0.55, '#1e3a8a');
+  eFill.addColorStop(1, '#091530');
+  ctx.fillStyle = eFill; ctx.fill();
+
+  ctx.strokeStyle = 'rgba(125,211,252,0.22)';
+  ctx.lineWidth = 1;
+  const spin = f.t * 0.004;
+  for (let lon = 0; lon < 12; lon++) {
+    const phi = lon * Math.PI / 6 + spin;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k <= 36; k++) {
+      const lat = -Math.PI/2 + k * Math.PI / 36;
+      const p3 = [R_E * Math.cos(lat) * Math.cos(phi), R_E * Math.sin(lat), R_E * Math.cos(lat) * Math.sin(phi)];
+      if (rotCam(p3, orbitCam)[2] < 0.2) {
+        const p2 = proj(p3, orbitCam, w, h, scale, dist);
+        if (!started) { ctx.moveTo(p2.x, p2.y); started = true; } else ctx.lineTo(p2.x, p2.y);
+      } else started = false;
+    }
+    ctx.stroke();
+  }
+  for (let latDeg of [-60, -30, 0, 30, 60]) {
+    const lat = latDeg * Math.PI / 180;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k <= 48; k++) {
+      const phi = k * Math.PI * 2 / 48 + spin;
+      const p3 = [R_E * Math.cos(lat) * Math.cos(phi), R_E * Math.sin(lat), R_E * Math.cos(lat) * Math.sin(phi)];
+      if (rotCam(p3, orbitCam)[2] < 0.2) {
+        const p2 = proj(p3, orbitCam, w, h, scale, dist);
+        if (!started) { ctx.moveTo(p2.x, p2.y); started = true; } else ctx.lineTo(p2.x, p2.y);
+      } else started = false;
+    }
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = 'rgba(56,189,248,0.42)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  sc.orbit_ring_km.forEach((pt, idx) => {
+    const p2 = proj([pt[0]/1000, pt[2]/1000, pt[1]/1000], orbitCam, w, h, scale, dist);
+    if (idx === 0) ctx.moveTo(p2.x, p2.y); else ctx.lineTo(p2.x, p2.y);
+  });
+  ctx.stroke();
+
+  const fIdx = Math.min(sc.frames.length - 1, Math.floor(frameF));
+
+  // Optional visual 360-deg showcase mode vs exact real-time Basilisk ECI orbital position
+  let satPos, vDisp, zBodyEciDisp, trailPts = [];
+  if (fast360Orbit && sc.orbit_ring_km.length > 2) {
+    const nRing = sc.orbit_ring_km.length - 1;
+    const ringFrac = (f.t / sc.events.duration_s) * nRing;
+    const rIdx = Math.floor(ringFrac) % nRing;
+    const rNext = (rIdx + 1) % nRing;
+    const alphaR = ringFrac - Math.floor(ringFrac);
+    const pA = sc.orbit_ring_km[rIdx], pB = sc.orbit_ring_km[rNext];
+    const rCur = [
+      pA[0] + (pB[0] - pA[0]) * alphaR,
+      pA[1] + (pB[1] - pA[1]) * alphaR,
+      pA[2] + (pB[2] - pA[2]) * alphaR,
+    ];
+    satPos = [rCur[0]/1000, rCur[2]/1000, rCur[1]/1000];
+    const tan = [pB[0]-pA[0], pB[1]-pA[1], pB[2]-pA[2]];
+    const tN = vecNorm(tan) || 1;
+    vDisp = [tan[0]/tN * 2.2, tan[2]/tN * 2.2, tan[1]/tN * 2.2];
+    const rN2 = vecNorm(rCur) || 1;
+    // Rotate body +Z error relative to current visual nadir so attitude error matches Basilisk!
+    const zL = [-rCur[0]/rN2, -rCur[1]/rN2, -rCur[2]/rN2];
+    const rxv = vecCross(rCur, tan);
+    const yL = vecScale(rxv, -1 / (vecNorm(rxv) || 1));
+    const xL = vecCross(yL, zL);
+    // Compute body +Z in real LVLH from real frame
+    const rr = f.r_km, vv = f.v_km_s;
+    const zLr = vecScale(rr, -1 / (vecNorm(rr) || 1));
+    const rxvr = vecCross(rr, vv);
+    const yLr = vecScale(rxvr, -1 / (vecNorm(rxvr) || 1));
+    const xLr = vecCross(yLr, zLr);
+    const zB_real = [f.dcm[0][2], f.dcm[1][2], f.dcm[2][2]];
+    const cX = vecDot(xLr, zB_real), cY = vecDot(yLr, zB_real), cZ = vecDot(zLr, zB_real);
+    const zB_vis = [
+      cX*xL[0] + cY*yL[0] + cZ*zL[0],
+      cX*xL[1] + cY*yL[1] + cZ*zL[1],
+      cX*xL[2] + cY*yL[2] + cZ*zL[2],
+    ];
+    zBodyEciDisp = [zB_vis[0]*3.0, zB_vis[2]*3.0, zB_vis[1]*3.0];
+    for (let k = 0; k <= rIdx; k++) {
+      const pk = sc.orbit_ring_km[k];
+      trailPts.push([pk[0]/1000, pk[2]/1000, pk[1]/1000]);
+    }
+    trailPts.push(satPos);
+  } else {
+    satPos = [f.r_km[0]/1000, f.r_km[2]/1000, f.r_km[1]/1000];
+    const vNorm0 = Math.hypot(f.v_km_s[0], f.v_km_s[1], f.v_km_s[2]) || 1;
+    vDisp = [f.v_km_s[0]/vNorm0 * 2.2, f.v_km_s[2]/vNorm0 * 2.2, f.v_km_s[1]/vNorm0 * 2.2];
+    const zBodyEci = [f.dcm[0][2], f.dcm[1][2], f.dcm[2][2]];
+    zBodyEciDisp = [zBodyEci[0] * 3.0, zBodyEci[2] * 3.0, zBodyEci[1] * 3.0];
+    const stride = Math.max(1, Math.floor(fIdx / 180));
+    for (let k = 0; k <= fIdx; k += stride) {
+      const pk = sc.frames[k].r_km;
+      trailPts.push([pk[0]/1000, pk[2]/1000, pk[1]/1000]);
+    }
+    trailPts.push(satPos);
+  }
+
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 3.2;
+  ctx.beginPath();
+  trailPts.forEach((pt, idx) => {
+    const p2 = proj(pt, orbitCam, w, h, scale, dist);
+    if (idx === 0) ctx.moveTo(p2.x, p2.y); else ctx.lineTo(p2.x, p2.y);
+  });
+  ctx.stroke();
+
+  const vNorm = Math.hypot(f.v_km_s[0], f.v_km_s[1], f.v_km_s[2]) || 1;
+
+  const pSat = proj(satPos, orbitCam, w, h, scale, dist);
+  ctx.save();
+  ctx.strokeStyle = f.att_err_deg < 2.0 ? 'rgba(34,197,94,0.85)' : 'rgba(245,158,11,0.8)';
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 2.0;
+  ctx.beginPath(); ctx.moveTo(pSat.x, pSat.y); ctx.lineTo(centerP.x, centerP.y); ctx.stroke();
+  ctx.restore();
+
+  drawArrow3D(ctx, satPos, vecAdd(satPos, zBodyEciDisp), orbitCam, w, h, scale, dist, '#22c55e', 2.4, 'Camera');
+  drawArrow3D(ctx, satPos, vecAdd(satPos, vDisp), orbitCam, w, h, scale, dist, '#f59e0b', 2.0, 'v');
+
+  // Glowing satellite icon + mini solar wings along orbit
+  ctx.beginPath(); ctx.arc(pSat.x, pSat.y, 12, 0, Math.PI * 2);
+  ctx.fillStyle = f.phase.includes('DIST') || f.phase.includes('PERT')
+    ? 'rgba(239,68,68,0.28)' : 'rgba(56,189,248,0.25)';
+  ctx.fill();
+  ctx.beginPath(); ctx.arc(pSat.x, pSat.y, 6.0, 0, Math.PI * 2);
+  ctx.fillStyle = f.phase.includes('DIST') || f.phase.includes('PERT') ? '#ef4444' : '#f8fafc';
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
+
+  const altKm = Math.hypot(f.r_km[0], f.r_km[1], f.r_km[2]) - 6371.0;
+  document.getElementById('orbitBadge').textContent =
+    `ALT: ${altKm.toFixed(1)} km | VEL: ${vNorm.toFixed(2)} km/s | r=[${f.r_km[0].toFixed(0)},${f.r_km[1].toFixed(0)},${f.r_km[2].toFixed(0)}] km`;
+}
+
+function renderSatView(sc, f) {
+  const canvas = document.getElementById('satCanvas');
+  const { ctx, w, h } = resizeCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+
+  const scale = Math.min(w, h) * 0.16;
+  const dist = 7.2;
+
+  const r = f.r_km, v = f.v_km_s;
+  const rN = vecNorm(r) || 1;
+  const zL = [-r[0]/rN, -r[1]/rN, -r[2]/rN];
+  const rxv = vecCross(r, v);
+  const rxvN = vecNorm(rxv) || 1;
+  const yL = [-rxv[0]/rxvN, -rxv[1]/rxvN, -rxv[2]/rxvN];
+  const xL = vecCross(yL, zL);
+
+  const R_LI = [xL, yL, zL];
+  const R_LB = [[0,0,0],[0,0,0],[0,0,0]];
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      R_LB[i][j] = R_LI[i][0]*f.dcm[0][j] + R_LI[i][1]*f.dcm[1][j] + R_LI[i][2]*f.dcm[2][j];
+
+  const lvlhToDisp = vL => [vL[0], -vL[2], vL[1]];
+  const bodyToDisp = vB => lvlhToDisp(matVec(R_LB, vB));
+
+  const earthP = proj([0, -2.55, 0], satCam, w, h, scale, dist);
+  ctx.save();
+  const hGrad = ctx.createRadialGradient(earthP.x, earthP.y + 70, 15, earthP.x, earthP.y + 70, 220);
+  hGrad.addColorStop(0, 'rgba(37, 99, 235, 0.35)');
+  hGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.14)');
+  hGrad.addColorStop(1, 'rgba(5, 8, 17, 0)');
+  ctx.fillStyle = hGrad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+
+  drawArrow3D(ctx, [0, 0, 0], [0, -2.25, 0], satCam, w, h, scale, dist, '#22c55e', 2.4, 'NADIR TARGET (Earth)');
+
+  const faces = [];
+  const lightDir = [0.55, 0.72, 0.42];
+  function addBox(cx, cy, cz, sx, sy, sz, baseRGB, strokeColor) {
+    const hx = sx/2, hy = sy/2, hz = sz/2;
+    const verts = [
+      [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz], [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+      [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz], [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz],
+    ].map(bodyToDisp);
+    const quads = [
+      [0,3,2,1], [4,5,6,7], [0,1,5,4], [2,3,7,6], [0,4,7,3], [1,2,6,5]
+    ];
+    for (const q of quads) {
+      const pts = q.map(i => verts[i]);
+      const n = vecCross(vecSub(pts[1], pts[0]), vecSub(pts[2], pts[0]));
+      const nLen = vecNorm(n) || 1;
+      const nHat = vecScale(n, 1 / nLen);
+      const shade = 0.38 + 0.62 * Math.max(0, vecDot(nHat, lightDir));
+      const p2 = pts.map(p => proj(p, satCam, w, h, scale, dist));
+      const avgZ = (p2[0].z + p2[1].z + p2[2].z + p2[3].z) * 0.25;
+      faces.push({
+        pts: p2, z: avgZ,
+        fill: `rgb(${Math.round(baseRGB[0]*shade)},${Math.round(baseRGB[1]*shade)},${Math.round(baseRGB[2]*shade)})`,
+        stroke: strokeColor
+      });
+    }
+  }
+
+  addBox(0, 0, 0, 1.05, 0.95, 1.15, [212, 168, 67], 'rgba(254,243,199,0.55)');
+  addBox(0,  1.55, 0, 0.72, 1.85, 0.06, [37, 99, 235], 'rgba(147,197,253,0.75)');
+  addBox(0, -1.55, 0, 0.72, 1.85, 0.06, [37, 99, 235], 'rgba(147,197,253,0.75)');
+  addBox(0, 0, 0.70, 0.42, 0.42, 0.26, [148, 163, 184], '#e2e8f0');
+
+  const rwColors = f.rw_eff_true.map(eff =>
+    eff >= 0.9 ? [34, 197, 94] : (eff > 0.05 ? [245, 158, 11] : [239, 68, 68])
+  );
+  addBox(0.58, 0, 0, 0.16, 0.34, 0.34, rwColors[0], '#f8fafc');
+  addBox(0, 0.52, 0.32, 0.32, 0.14, 0.32, rwColors[1], '#f8fafc');
+  addBox(0, 0, -0.63, 0.36, 0.36, 0.14, rwColors[2], '#f8fafc');
+
+  faces.sort((a, b) => b.z - a.z);
+  for (const fc of faces) {
+    ctx.beginPath();
+    ctx.moveTo(fc.pts[0].x, fc.pts[0].y);
+    for (let i = 1; i < fc.pts.length; i++) ctx.lineTo(fc.pts[i].x, fc.pts[i].y);
+    ctx.closePath();
+    ctx.fillStyle = fc.fill; ctx.fill();
+    ctx.strokeStyle = fc.stroke; ctx.lineWidth = 1.0; ctx.stroke();
+  }
+
+  const spinAngle = f.t * (f.rw_rpm[0] * 0.02 + 0.5);
+  const spA = proj(bodyToDisp([0.67, 0.14*Math.cos(spinAngle), 0.14*Math.sin(spinAngle)]), satCam, w, h, scale, dist);
+  const spB = proj(bodyToDisp([0.67, -0.14*Math.cos(spinAngle), -0.14*Math.sin(spinAngle)]), satCam, w, h, scale, dist);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(spA.x, spA.y); ctx.lineTo(spB.x, spB.y); ctx.stroke();
+
+  drawArrow3D(ctx, bodyToDisp([0,0,0]), bodyToDisp([1.45, 0, 0]), satCam, w, h, scale, dist, '#f87171', 1.7, '+X (RW1)');
+  drawArrow3D(ctx, bodyToDisp([0,0,0]), bodyToDisp([0, 1.25, 0]), satCam, w, h, scale, dist, '#4ade80', 1.5, '+Y');
+  drawArrow3D(ctx, bodyToDisp([0,0,0.6]), bodyToDisp([0, 0, 2.2]), satCam, w, h, scale, dist, '#38bdf8', 2.8, '+Z CAMERA');
+
+  const dMag = vecNorm(f.dist_nm);
+  if (dMag > 1e-4) {
+    const dScale = 1.9 / (sc.tau_lim_nm * 0.25);
+    const dTip = bodyToDisp([f.dist_nm[0]*dScale, f.dist_nm[1]*dScale, f.dist_nm[2]*dScale]);
+    drawArrow3D(ctx, [0,0,0], dTip, satCam, w, h, scale, dist, '#ef4444', 3.4, 'DISTURBANCE');
+  }
+
+  const tMag = vecNorm(f.tau_ach_nm);
+  if (tMag > 5e-4) {
+    const tScale = Math.min(2.0 / Math.max(tMag, 1e-4), 1.6 / (sc.tau_lim_nm * 0.35));
+    const tTip = bodyToDisp([f.tau_ach_nm[0]*tScale, f.tau_ach_nm[1]*tScale, f.tau_ach_nm[2]*tScale]);
+    drawArrow3D(ctx, [0,0,0], tTip, satCam, w, h, scale, dist, '#a78bfa', 2.4, 'Ctrl Torque');
+  }
+
+  const badge = document.getElementById('satBadge');
+  badge.textContent = `ATTITUDE ERROR: ${f.att_err_deg.toFixed(2)}° | ${f.att_err_deg < 1.0 ? 'NADIR LOCKED' : (f.att_err_deg < 5.0 ? 'TRACKING' : 'PERTURBED / SLEWING')}`;
+  badge.style.borderColor = f.att_err_deg < 1.0 ? '#22c55e' : (f.att_err_deg < 5.0 ? '#f59e0b' : '#ef4444');
+}
+
+function drawSparkline(canvasId, seriesList, yMaxFixed, curIdxF, sc) {
+  const canvas = document.getElementById(canvasId);
+  const { ctx, w, h } = resizeCanvas(canvas, 74);
+  ctx.clearRect(0, 0, w, h);
+
+  const n = sc.frames.length;
+  const ev = sc.events;
+  const tToX = t => (t / ev.duration_s) * w;
+
+  ctx.fillStyle = 'rgba(239,68,68,0.14)';
+  ctx.fillRect(tToX(ev.dist1_start), 0, tToX(ev.dist1_end) - tToX(ev.dist1_start), h);
+  ctx.fillRect(tToX(ev.dist2_start), 0, tToX(ev.dist2_end) - tToX(ev.dist2_start), h);
+  ctx.strokeStyle = 'rgba(245,158,11,0.75)';
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(tToX(ev.fault_start), 0); ctx.lineTo(tToX(ev.fault_start), h); ctx.stroke();
+  ctx.setLineDash([]);
+
+  let yMax = yMaxFixed;
+  if (!yMax) {
+    yMax = 1.0;
+    for (const s of seriesList) for (const v of s.data) if (v > yMax) yMax = v;
+    yMax *= 1.08;
+  }
+
+  for (const s of seriesList) {
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 1.6;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * w;
+      const y = h - 4 - Math.min(1, Math.max(0, s.data[i] / yMax)) * (h - 8);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  const px = (curIdxF / (n - 1)) * w;
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+}
+
+function updateHUD(sc, f, fIdx) {
+  const phaseTitles = {
+    ACQUISITION: 'PHASE 1: RANDOM INIT -> NADIR ACQUISITION',
+    NOMINAL_LOCK: 'PHASE 1B: NADIR LOCKED (NOMINAL)',
+    DISTURBANCE: 'PHASE 2: EXTERNAL DISTURBANCE APPLIED!',
+    WHEEL_FAULT: `PHASE 3: RW${sc.fault_wheel+1} FAILURE (${sc.wheel_loss_pct}% LOSS)`,
+    FAULT_PERTURBED: `PHASE 3B: DISTURBANCE WITH ${sc.wheel_loss_pct}% RW${sc.fault_wheel+1} LOSS!`,
+  };
+  const banner = document.getElementById('phaseBanner');
+  banner.className = 'phase-banner phase-' + f.phase;
+  document.getElementById('phaseText').textContent = phaseTitles[f.phase] || f.phase;
+  document.getElementById('modeBadge').textContent = f.mode;
+
+  document.getElementById('kpiErr').textContent = f.att_err_deg.toFixed(2) + '°';
+  document.getElementById('kpiRate').textContent = f.rate_deg_s.toFixed(2) + '°/s';
+  document.getElementById('kpiRho').textContent = f.rho.toFixed(2);
+  document.getElementById('kpiAlpha').textContent = f.alpha.toFixed(2);
+
+  for (let i = 0; i < 3; i++) {
+    const eff = f.rw_eff_true[i];
+    const est = Math.max(0, Math.min(1, f.rw_eff_est[i]));
+    const color = eff >= 0.9 ? 'var(--green)' : (eff > 0.05 ? 'var(--amber)' : 'var(--red)');
+    document.getElementById(`rw${i}Txt`).textContent =
+      `True ${(eff*100).toFixed(0)}% | Est ${(est*100).toFixed(0)}% | ${f.rw_rpm[i].toFixed(0)} RPM`;
+    const bar = document.getElementById(`rw${i}Bar`);
+    bar.style.width = `${(eff*100).toFixed(1)}%`;
+    bar.style.background = color;
+    document.getElementById(`rw${i}Est`).style.left = `calc(${(est*100).toFixed(1)}% - 1.5px)`;
+  }
+
+  if (f.mtq_cmd) {
+    document.getElementById('mtqTxt').textContent =
+      `[${f.mtq_cmd[0].toFixed(2)}, ${f.mtq_cmd[1].toFixed(2)}, ${f.mtq_cmd[2].toFixed(2)}] A·m²`;
+  }
+
+  drawSparkline('errSpark', [
+    { data: sc.frames.map(fr => fr.att_err_deg), color: '#38bdf8', width: 1.8 }
+  ], null, fIdx, sc);
+
+  drawSparkline('gateSpark', [
+    { data: sc.frames.map(fr => fr.rho), color: '#a78bfa', width: 1.4 },
+    { data: sc.frames.map(fr => fr.alpha), color: '#22c55e', width: 1.6 },
+    { data: sc.frames.map(fr => fr.rw_eff_est[sc.fault_wheel]), color: '#f59e0b', width: 1.8 }
+  ], 1.05, fIdx, sc);
+
+  document.getElementById('timeReadout').textContent =
+    `t = ${f.t.toFixed(1)} s / ${sc.events.duration_s.toFixed(1)} s`;
+}
+
+document.getElementById('playBtn').onclick = () => {
+  playing = !playing;
+  document.getElementById('playBtn').textContent = playing ? 'Pause' : 'Play';
+};
+document.getElementById('resetBtn').onclick = () => {
+  frameF = 0; playing = true;
+  document.getElementById('playBtn').textContent = 'Pause';
+};
+document.getElementById('speedSel').onchange = e => { speed = parseFloat(e.target.value); };
+document.getElementById('scrubber').oninput = e => { frameF = parseFloat(e.target.value); };
+
+document.getElementById('orbitModeBtn').onclick = e => {
+  fast360Orbit = !fast360Orbit;
+  e.target.textContent = fast360Orbit ? 'Orbit: Full 360° Showcase' : 'Orbit: Real Basilisk ECI';
+};
+
+function tick(now) {
+  const dtReal = Math.min(0.05, (now - lastTs) / 1000.0);
+  lastTs = now;
+  const sc = SCENARIOS[curIdx];
+  const fHz = sc.frame_hz || 5.0;
+  if (playing) {
+    frameF += dtReal * fHz * speed;
+    if (frameF >= sc.frames.length - 1) frameF = 0;
+    document.getElementById('scrubber').value = Math.floor(frameF);
+  }
+  const fIdx = Math.min(sc.frames.length - 1, Math.max(0, Math.floor(frameF)));
+  const f = sc.frames[fIdx];
+  renderOrbitView(sc, f);
+  renderSatView(sc, f);
+  updateHUD(sc, f, fIdx);
+  requestAnimationFrame(tick);
+}
+
+initScenarioUI();
+selectScenario(curIdx);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

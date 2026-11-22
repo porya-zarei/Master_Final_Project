@@ -1,0 +1,24 @@
+# Classical LQR/PD Baseline Controller Configuration (Arm A0 / B5)
+# Units: SI
+
+classical_lqr:
+  q_attitude: 1.0          # Attitude error weight (rad^-2)
+  q_rate: 80.0             # Angular rate error weight (s^2 / rad^2)
+  r_torque: 4.0            # Body torque effort weight (N^-2 m^-2)
+  gyroscopic_feedforward: true
+  ki_attitude: 0.0         # Pure LQR for A0; disturbance rejection handled by DOB/ESO in A2
+  integral_limit_rad_s: 0.2
+  anti_windup_gain: 2.0
+  max_slew_rate_rad_s: 0.08
+  max_torque_request_nm: 0.45
+
+allocator:
+  capability_aware: false
+  use_conservative_effectiveness: false
+  compensate_bias: false
+  regularization: 1.0e-6
+  qp_max_iters: 30
+  mtq_assist_enabled: true
+  mtq_unload_gain: 0.002
+  mtq_min_b_norm_t: 1.0e-6
+  momentum_guard_fraction: 0.96

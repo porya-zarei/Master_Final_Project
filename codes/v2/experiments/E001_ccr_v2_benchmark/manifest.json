@@ -1,0 +1,75 @@
+{
+  "experiment_id": "E001_ccr_v2_benchmark",
+  "description": "CCR v2 paired benchmark, ablations, and CPU profiling across S0-S8",
+  "metric_schema_version": "1.0.0",
+  "backend": "fast_rk4",
+  "basilisk_cross_validation": "BLOCKED_NOT_VALIDATED (Basilisk not installed)",
+  "policy_hashes": {
+    "A4_unstructured_rl": "6e10015dd8ce96945c4591a36ff9387e007272cb952131a108d52757e6cb0d74",
+    "A5_rl_need_rho": "b40366719d9375ae485fe0a7ff0f0bb57fd65b5c49a6ccb9390a8ac98ab4bb5f",
+    "A6_rl_oracle_gate": "11638b6f8940ff82fec16af7d68a46ba7dcd1f106ff5eb83273497670a9a7974",
+    "A7_ccr_v2_full": "4250c0c2622cce00faae1d1f4d3bf4a21980975aedd65fab7aa83acb68dc4e41",
+    "A7_clean_trained": "6925f92e42bc5dbb75f6a59bfd03adaddee1a30078602a7d501fed17f3a3271c"
+  },
+  "train_times_s": {
+    "A4_unstructured_rl": 170.4760356999468,
+    "A5_rl_need_rho": 168.6720847999677,
+    "A6_rl_oracle_gate": 167.29644970002118,
+    "A7_ccr_v2_full": 169.01133760006633,
+    "A7_clean_trained": 165.37680610001553
+  },
+  "eval_wall_time_s": 702.228877000045,
+  "total_wall_time_s": 944.7137485999847,
+  "config": {
+    "train_steps": 12000,
+    "train_seed": 42,
+    "n_seeds": 6,
+    "eval_seeds": [100, 101, 102, 103, 104, 105],
+    "eval_arms": [
+      "A0_classical_lqr",
+      "A1_classical_oracle_alloc",
+      "A2_classical_dob_eso",
+      "A3_strong_classical",
+      "A4_unstructured_rl",
+      "A5_rl_need_rho",
+      "A6_rl_oracle_gate",
+      "A7_ccr_v2_full",
+      "Abl_A7_no_rho",
+      "Abl_A7_no_alpha",
+      "Abl_A7_no_G",
+      "Abl_A7_no_supervisor",
+      "Abl_A7_geom_G",
+      "Abl_A7_clean_trained"
+    ],
+    "eval_scenarios": [
+      "S0_nominal_val",
+      "S0_nominal_test",
+      "S1_rw1_gradual40_val",
+      "S1_rw2_severe25_test",
+      "S2_rw0_lock_val",
+      "S2_rw1_stuck_torque_test",
+      "S3_momentum_sat_val",
+      "S3_momentum_sat_test",
+      "S4_rw_bias_stiction_test",
+      "S5_mtq_degraded_test",
+      "S6_st_dropout_val",
+      "S6_sensor_fault_test",
+      "S7_inertia_mismatch_val",
+      "S7_inertia_mismatch_test",
+      "S8_combined_rw_sensor_test"
+    ],
+    "spacecraft_config_hash": "00b08061283d84e03adf1b5e3a531eeea317d42f1f0156787f611460fd9ccc9f"
+  },
+  "run_metadata": {
+    "timestamp_utc": "2026-11-21T16:25:01.796807+00:00",
+    "adcs_version": "0.1.0",
+    "git_commit": "3b5746c4c7acae2c092d5a39c8af08f1344d7862",
+    "git_dirty": true,
+    "python_version": "3.14.6",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "numpy_version": "2.5.0",
+    "scipy_version": "1.18.1",
+    "pyyaml_version": "6.0.3",
+    "config_hash": "4faf89f1e059e035fb05f84907d8efd2b70b523c129a72fe8d0747a001dd3780"
+  }
+}

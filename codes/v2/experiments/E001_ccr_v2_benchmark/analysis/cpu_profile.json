@@ -1,0 +1,74 @@
+{
+  "control_period_budget_ms": 200.0,
+  "budget_utilization_pct_mean": 1.8836122018983588,
+  "budget_utilization_pct_p99": 3.115333971218206,
+  "peak_python_traced_memory_kb": 145.341796875,
+  "current_python_traced_memory_kb": 130.943359375,
+  "mlp_param_count": 6339,
+  "mlp_weights_float32_kb": 24.76171875,
+  "components": [
+    {
+      "component": "B1_MEKF",
+      "n_calls": 500,
+      "mean_ms": 0.7343942036386579,
+      "p50_ms": 0.6472000386565924,
+      "p95_ms": 1.2203799793496726,
+      "p99_ms": 1.4349379832856357,
+      "max_ms": 1.8347000004723668
+    },
+    {
+      "component": "B3_OnlineCapability",
+      "n_calls": 500,
+      "mean_ms": 1.5246323966421187,
+      "p50_ms": 1.3418500311672688,
+      "p95_ms": 2.3756199283525343,
+      "p99_ms": 2.6082199532538652,
+      "max_ms": 2.774700056761503
+    },
+    {
+      "component": "B6_PolicyInference_NumPy",
+      "n_calls": 500,
+      "mean_ms": 0.03381119994446635,
+      "p50_ms": 0.02819998189806938,
+      "p95_ms": 0.06057999562472098,
+      "p99_ms": 0.09434490464627739,
+      "max_ms": 0.14340004418045282
+    },
+    {
+      "component": "CCR_v2_Controller_Step",
+      "n_calls": 500,
+      "mean_ms": 1.508197803515941,
+      "p50_ms": 1.3160500093363225,
+      "p95_ms": 2.39600496715866,
+      "p99_ms": 2.7283560519572347,
+      "max_ms": 3.1414999393746257
+    },
+    {
+      "component": "A3_StrongClassical_Step",
+      "n_calls": 500,
+      "mean_ms": 0.9117329996079206,
+      "p50_ms": 0.7856499287299812,
+      "p95_ms": 1.5453749976586542,
+      "p99_ms": 1.7781120352447033,
+      "max_ms": 1.9687999738380313
+    },
+    {
+      "component": "onboard_total_B1_B3_CCR_v2",
+      "n_calls": 500,
+      "mean_ms": 3.7672244037967175,
+      "p50_ms": 3.3610000391490757,
+      "p95_ms": 5.6152050150558335,
+      "p99_ms": 6.230667942436412,
+      "max_ms": 6.775100016966462
+    },
+    {
+      "component": "FastSimulator_RK4_Step",
+      "n_calls": 500,
+      "mean_ms": 37.18340300139971,
+      "p50_ms": 35.60329996980727,
+      "p95_ms": 46.50236991583365,
+      "p99_ms": 60.12030707905068,
+      "max_ms": 61.88400008250028
+    }
+  ]
+}

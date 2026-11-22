@@ -1,0 +1,26 @@
+{
+  "experiment_id": "E002_ccr_v2_igrf14_rlsfix",
+  "description": "CCR v2 paired benchmark with official degree-13 IGRF-14, directional-forgetting RLS, A7_ccr_v2_eso, and Gate C6 Basilisk 2.12.2 cross-validation",
+  "metric_schema_version": "1.0.0",
+  "backend": "fast_rk4",
+  "geomagnetic_model": "IGRF-14_deg_13_epoch_2025.00 (configs/igrf14coeffs.txt)",
+  "basilisk_cross_validation": "VALIDATED_GATE_C6 (bsk 2.12.2, max_att_diff=0.0086 deg, max_pos_diff=9.31 nm)",
+  "policy_hashes": {
+    "A4_unstructured_rl": "31df99d188fbe79863b6b2457a79fedcefe3ebbffcfa158e5396c72b1be03dc5",
+    "A5_rl_need_rho": "96678a320eb6303ef4fe166842125cb8e0cf760a7976b420ece574941f69cb18",
+    "A6_rl_oracle_gate": "9ddacbe16b73b585afdc7a5aefdd2357743c8e14e4f9c3a87856d5742afe1b2f",
+    "A7_ccr_v2_full": "3f414b289b9750d95d9ee7e47ee1ae79e823efa5f7d1c94a6502ae6813518ffa",
+    "A7_ccr_v2_eso": "af0197ad1ec25267d5a24da1575b28d3a7cc3edfa316d41595dd8f5f0b00aa5b",
+    "A7_clean_trained": "f0056656258b9f331703425c9dec3f751fdf1a1f2cf4bae7017a2f30fb38ae0e"
+  },
+  "config": {
+    "train_steps": 15000,
+    "train_seed": 42,
+    "n_seeds": 6,
+    "eval_seeds": [100, 101, 102, 103, 104, 105],
+    "n_arms": 15,
+    "n_scenarios": 15,
+    "total_episodes": 1350,
+    "spacecraft_config_hash": "00b08061283d84e03adf1b5e3a531eeea317d42f1f0156787f611460fd9ccc9f"
+  }
+}

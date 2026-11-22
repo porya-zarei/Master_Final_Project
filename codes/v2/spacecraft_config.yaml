@@ -1,0 +1,168 @@
+# Spacecraft Reference Configuration 001
+# Status: preliminary research plant; NOT flight hardware validated
+# Units: SI unless explicitly stated
+# Sources: see source_notes below. Values tagged assumed/proposed are design choices.
+
+metadata:
+  name: spacecraft_reference_001
+  version: 0.1.0
+  status: preliminary
+  purpose: deterministic nonlinear ADCS plant for CCR research
+  configuration_owner: research
+  notes:
+    - Separate published/reference values from assumptions.
+    - Replace provisional actuator values with selected hardware datasheets before HIL.
+
+spacecraft:
+  mass_kg: 100.0
+  dimensions_m: [1.0, 1.0, 1.0]
+  body_frame: {definition: right_handed, origin: center_of_mass, axes: body_fixed}
+  inertia:
+    model: uniform_cube_approximation
+    matrix_kg_m2: [[16.6666666667, 0.0, 0.0], [0.0, 16.6666666667, 0.0], [0.0, 0.0, 16.6666666667]]
+    status: assumed
+    uncertainty_fraction: 0.25 # simulation robustness sweep; not an estimated covariance
+
+orbit:
+  model: circular_keplerian
+  altitude_m: 500000.0
+  earth_radius_m: 6378137.0
+  semi_major_axis_m: 6878137.0
+  eccentricity: 0.0
+  inclination_deg: 51.6 # provisional scenario, not mission requirement
+  raan_deg: 0.0
+  argument_of_perigee_deg: 0.0
+  true_anomaly_deg_initial: 0.0
+  epoch_utc: null # set for time-dependent Earth magnetic-field model
+  gravitational_parameter_m3_s2: 3.986004418e14
+  propagator: two_body_keplerian
+
+attitude_reference:
+  mode: nadir_pointing
+  frame: LVLH
+  definition: spacecraft_body_z_axis_points_to_earth_nadir; body_x_axis_aligned_with_velocity_projection
+  quaternion_convention: scalar_first [q0, q1, q2, q3]
+  quaternion_mapping: body_to_reference # verify convention in implementation tests
+  desired_body_rate: orbit_frame_rate_compensated
+  reference_generation: orbit_position_velocity_to_LVLH_quaternion
+  singularity_handling: maintain_previous_axis_if_velocity_projection_degenerate
+
+simulation:
+  control_period_s: 0.2
+  control_rate_hz: 5.0
+  integration:
+    method: RK4
+    step_s: 0.01
+    deterministic: true
+  random_seed: 0
+  output:
+    state_logging_rate_hz: 5.0
+    log_all_substeps: false
+  interface:
+    name: plant_step
+    input_fields: [time_s, attitude_quaternion, body_rate_rad_s, wheel_momentum_Nms, rw_torque_command_Nm, mtq_dipole_command_Am2]
+    output_fields: [attitude_quaternion, body_rate_rad_s, wheel_momentum_Nms, achieved_rw_torque_Nm, achieved_mtq_dipole_Am2, magnetic_field_body_T, disturbance_torque_body_Nm, actuator_status]
+    input_validation: finite_values_and_shape_checks
+    state_reset: explicit_reset_with_initial_state_and_seed
+    no_hidden_randomness: true
+    determinism_test: identical_inputs_and_seed_must_produce_identical_outputs
+
+reaction_wheels:
+  count: 3
+  configuration: orthogonal
+  axis_matrix_body: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]] # columns are wheel spin axes
+  per_wheel:
+    rotor_inertia_kg_m2: 0.0149 # provisional reference value; verify hardware source/datasheet
+    torque_limit_nominal_Nm: 0.15 # assumed design point
+    torque_limit_peak_Nm: 0.31 # assumed design point; peak duration TBD
+    momentum_limit_nominal_Nms: 6.0 # assumed design point
+    momentum_limit_peak_Nms: 7.83 # assumed design point; verify consistency with speed/inertia
+    speed_limit_rpm: 5000.0 # provisional; verify consistency with momentum limit
+    response:
+      model: first_order_torque_actuator
+      time_constant_s: 0.1 # provisional
+    friction:
+      model: viscous_plus_coulomb
+      viscous_Nm_per_rad_s: 0.0 # TBD; characterize or sweep
+      coulomb_Nm: 0.0 # TBD; characterize or sweep
+      stiction_band_Nm: 0.0 # TBD; characterize or sweep
+  saturation:
+    torque: hard_clip_with_status
+    momentum: hard_clip_with_status
+    momentum_state_definition: wheel_rotor_spin_momentum_about_wheel_axis
+  fault_hooks: [effectiveness_loss, torque_bias, friction_increase, stiction, wheel_lock, delay, speed_sensor_fault]
+
+magnetorquers:
+  count: 3
+  configuration: orthogonal
+  axis_matrix_body: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]] # columns are dipole axes
+  dipole_limit_per_axis_Am2: 2.0 # proposed for this 100 kg reference; not paper-derived
+  dipole_command_limits_Am2: [[-2.0, 2.0], [-2.0, 2.0], [-2.0, 2.0]]
+  response:
+    model: first_order_dipole_actuator
+    time_constant_s: 0.1 # provisional
+  torque_model: cross_product_dipole_with_magnetic_field
+  torque_equation: tau_MTQ_body_Nm = cross(m_body_Am2, B_body_T)
+  fault_hooks: [effectiveness_loss, polarity_reversal, bias, delay, dropout]
+
+earth_magnetic_field:
+  model: IGRF
+  generation: IGRF-14
+  epoch_model: 2025.0_coefficients_with_secular_variation_to_2030
+  coordinate_input: geocentric_position_and_utc
+  output_frame: ECEF_then_transform_to_body
+  output_units: tesla
+  implementation: external_validated_library_or_coefficients
+  reference_field_is_not_constant: true
+
+disturbances:
+  gravity_gradient:
+    enabled: true
+    equation: tau_gg_body = 3 * mu / r^3 * cross(r_hat_body, J * r_hat_body)
+    inputs: [earth_gravitational_parameter, spacecraft_position, attitude, inertia_matrix]
+  residual_magnetic_dipole:
+    enabled: true
+    dipole_body_Am2: [0.0, 0.0, 0.0] # TBD; parameter sweep until characterized
+    equation: tau_residual_magnetic = cross(residual_dipole_body, B_body)
+  aerodynamic:
+    enabled: false # add after baseline; requires atmosphere, geometry and drag coefficient
+    model: TBD
+  solar_radiation_pressure:
+    enabled: false # add after baseline; requires area, optical coefficients and Sun vector
+    model: TBD
+  total_disturbance_torque: sum_enabled_disturbance_models
+
+validation:
+  required_tests:
+    - quaternion_norm_preservation_and_normalization
+    - torque_sign_and_frame_transform_tests
+    - torque_free_total_angular_momentum_conservation
+    - wheel_momentum_and_torque_saturation
+    - mtq_torque_perpendicular_to_magnetic_field
+    - mtq_dipole_saturation
+    - gravity_gradient_torque_frame_consistency
+    - nadir_reference_frame_consistency
+    - deterministic_replay_same_seed_same_outputs
+    - timestep_convergence
+  status: not_run
+
+source_notes:
+  - id: paper_2019_rw_mtq_leo
+    citation: Avanzini et al., Attitude control of Low Earth Orbit satellites by reaction wheels and magnetic torquers, Acta Astronautica, 2019.
+    url: https://www.sciencedirect.com/science/article/pii/S009457651831974X
+    supports: LEO combined RW/MTQ control, orthogonal MTQ arrangement, disturbance inclusion and simultaneous attitude/momentum-management context
+  - id: paper_2020_generic_satellite_model
+    citation: Generic Model of a Satellite Attitude Control System, 2020, DOI 10.1155/2020/5352019.
+    url: https://onlinelibrary.wiley.com/doi/10.1155/2020/5352019
+    supports: rigid-body equations, actuator-frame torque modeling, RW momentum dynamics, MTQ dipole-cross-field torque, example 6.2 kg satellite values (not scaled to this spacecraft)
+  - id: paper_nadir_momentum_wheel
+    citation: Yang, Quaternion based model for momentum biased nadir pointing spacecraft, Aerospace Science and Technology, 2010, DOI 10.1016/j.ast.2009.12.006.
+    url: https://www.sciencedirect.com/science/article/pii/S1270963809001060
+    supports: nadir/LVLH reference treatment, wheel momentum term, gravity-gradient disturbance in nonlinear model
+  - id: igrf14
+    citation: IGRF-14, IAGA/NCEI; adopted November 2024, predictive secular variation through 2030.
+    url: https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field
+    supports: Earth magnetic-field model choice
+  - id: mass_inertia
+    citation: Uniform cube inertia derived analytically from selected mass and dimensions.
+    supports: inertia_matrix_kg_m2

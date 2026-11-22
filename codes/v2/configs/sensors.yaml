@@ -1,0 +1,26 @@
+# Sensor Suite & MEKF Configuration (SI units)
+
+sensors:
+  gyro_noise_std_rad_s: 2.0e-4
+  gyro_bias_init_std_rad_s: 5.0e-4
+  gyro_bias_rw_std_rad_s_sqrt_s: 1.0e-5
+  star_tracker_noise_std_rad: 5.0e-4
+  star_tracker_rate_divider: 1
+  mag_noise_std_t: 3.0e-7
+  rw_speed_noise_std_rad_s: 0.05
+
+mekf:
+  gyro_noise_std_rad_s: 3.0e-4
+  gyro_bias_rw_std_rad_s_sqrt_s: 3.0e-5
+  star_tracker_noise_std_rad: 6.0e-4
+  init_att_std_rad: 0.02
+  init_bias_std_rad_s: 2.0e-3
+  mahalanobis_reject_threshold: 25.0
+  obs_att_std_nom_rad: 0.003
+  obs_att_std_scale_rad: 0.025
+  obs_age_nom_s: 0.6
+  obs_age_scale_s: 6.0
+  obs_innov_nom: 3.5
+  obs_innov_scale: 8.0
+  obs_innov_ema_alpha: 0.25
+  max_blackout_s: 120.0

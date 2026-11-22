@@ -1,0 +1,57 @@
+# CCR v2 Architecture Configuration (B2, B3, B4/B8 Supervisor, B7 Deterministic Gate, B6 SAC)
+# Units: SI
+
+ccr_v2:
+  action_scale_nm: 0.06
+  use_eso_backbone: false
+
+gate:
+  enable_rho: true
+  enable_alpha: true
+  enable_directional_g: true
+  use_supervisor: true
+  use_geometry_projection: false
+  rho_att_scale_rad: 0.08
+  rho_rate_scale_rad_s: 0.015
+  rho_resid_scale: 0.35
+  rho_deadband: 0.06
+  rho_full_score: 1.0
+  trust_att_std_nom_rad: 0.004
+  trust_att_std_scale_rad: 0.03
+  trust_ood_rate_nom_rad_s: 0.12
+  trust_ood_rate_scale_rad_s: 0.15
+  alpha_slew_down_per_s: 2.5
+  alpha_slew_up_per_s: 0.35
+  directional_exponent: 1.0
+  max_residual_torque_nm: 0.06
+
+supervisor:
+  gamma_unsafe_min: 0.25
+  gamma_suspect_thresh: 0.75
+  gamma_recover_min: 0.65
+  max_data_age_s: 15.0
+  deg_suspect_thresh: 0.15
+  deg_confirm_thresh: 0.25
+  deg_clear_thresh: 0.08
+  min_cap_conf_for_confirm: 0.35
+  contradictory_resid_thresh: 0.45
+  contradictory_cap_conf_max: 0.25
+  persist_suspect_steps: 3
+  persist_confirm_steps: 8
+  persist_contradictory_steps: 10
+  persist_recover_m3_steps: 10
+  persist_clear_deg_steps: 15
+  persist_m4_to_m0_steps: 15
+
+sac:
+  total_steps: 20000
+  warmup_steps: 1500
+  batch_size: 128
+  buffer_size: 50000
+  gamma: 0.99
+  tau_polyak: 0.005
+  actor_lr: 3.0e-4
+  critic_lr: 3.0e-4
+  alpha_lr: 3.0e-4
+  hidden_dim: 64
+  critic_hidden_dim: 128
